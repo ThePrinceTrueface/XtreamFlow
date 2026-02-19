@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>XtreamFlow</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Segoe+UI:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+      @font-face {
+        font-family: 'Segoe UI Variable';
+        src: local('Segoe UI Variable'), local('Segoe UI');
+      }
+
+      body {
+        font-family: 'Segoe UI Variable', 'Segoe UI', sans-serif;
+        /* Desktop Wallpaper Simulation */
+        background-image: url('https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=2564&auto=format&fit=crop');
+        background-size: cover;
+        background-position: center;
+        overflow: hidden;
+        user-select: none;
+      }
+
+      /* Custom Scrollbar styled for Windows 11 Overlay */
+      ::-webkit-scrollbar {
+        width: 10px;
+        height: 10px;
+      }
+      ::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.3);
+        border-radius: 5px;
+        border: 3px solid transparent;
+        background-clip: content-box;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: rgba(255, 255, 255, 0.5);
+        border: 3px solid transparent;
+        background-clip: content-box;
+      }
+      
+      .drag-region {
+        -webkit-app-region: drag;
+      }
+      .no-drag {
+        -webkit-app-region: no-drag;
+      }
+    </style>
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            colors: {
+              fluent: {
+                mica: '#202020',
+                micaAlt: '#1a1a1a',
+                layer: '#2c2c2c',
+                layerHover: '#353535',
+                border: 'rgba(255, 255, 255, 0.06)',
+                borderActive: 'rgba(255, 255, 255, 0.1)',
+                text: '#ffffff',
+                subtext: 'rgba(255, 255, 255, 0.7)',
+                accent: '#60CDFF',
+                accentHover: '#4CC2FF',
+                danger: '#FF4D4F',
+              }
+            },
+            boxShadow: {
+              'flyout': '0 8px 16px rgba(0, 0, 0, 0.35), 0 0 2px rgba(0,0,0,0.2)',
+              'window': '0 0 20px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255,255,255,0.08)',
+            },
+            borderRadius: {
+              'window': '8px',
+              'control': '4px',
+            }
+          }
+        }
+      }
+    </script>
+  <script type="importmap">
+{
+  "imports": {
+    "react/": "https://esm.sh/react@^19.2.4/",
+    "react": "https://esm.sh/react@^19.2.4",
+    "lucide-react": "https://esm.sh/lucide-react@^0.564.0",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.4/",
+    "hls.js": "https://esm.sh/hls.js@^1.5.0",
+    "webworker": "https://esm.sh/webworker@^0.8.4"
+  }
+}
+</script>
+</head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>
