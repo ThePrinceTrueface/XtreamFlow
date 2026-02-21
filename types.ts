@@ -1,3 +1,4 @@
+
 import React from 'react';
 
 export interface XtreamAccount {
@@ -30,6 +31,25 @@ export interface AppBackup {
   timestamp: number;
   accounts: XtreamAccount[];
   servers: SavedServer[];
+}
+
+// --- User Preferences (Local Storage) ---
+
+export interface StreamProgress {
+  time: number;       // Current playback time in seconds
+  duration: number;   // Total duration
+  progress: number;   // 0.0 to 1.0
+  lastWatched: number;// Unix timestamp
+  finished: boolean;  // True if progress > 95%
+}
+
+export interface AccountPreferences {
+  favorites: string[]; // Array of stream_id or series_id
+  history: Record<string, StreamProgress>; // Key is stream_id/episode_id
+}
+
+export interface GlobalPreferences {
+  [accountId: string]: AccountPreferences;
 }
 
 // --- API Response Types ---
@@ -169,4 +189,23 @@ export interface ModalConfig {
   onCancel?: () => void; // Used for closing
   confirmLabel?: string;
   cancelLabel?: string;
+}
+
+export interface XtreamEPGProgram {
+  id: string;
+  epg_id: string;
+  title: string;
+  lang: string;
+  start: string; 
+  end: string;
+  description: string;
+  channel_id: string;
+  start_timestamp: number;
+  stop_timestamp: number;
+  now_playing?: number;
+  has_archive?: number;
+}
+
+export interface XtreamEPGResponse {
+  epg_listings: XtreamEPGProgram[];
 }

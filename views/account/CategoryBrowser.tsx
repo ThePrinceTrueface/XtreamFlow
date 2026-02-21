@@ -14,6 +14,7 @@ import { ItemGrid, HorizontalRow } from './components/BrowsingViews';
 import { ItemDetailView } from './components/ItemDetailView';
 import { SkeletonLoader } from './components/SkeletonLoader';
 import { StreamListSidebar } from './components/StreamListSidebar';
+import { EPGView } from './components/EPGView';
 
 interface CategoryBrowserProps {
     account: XtreamAccount;
@@ -24,6 +25,7 @@ interface CategoryBrowserProps {
 export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type, fetchCached }) => {
   // Navigation & UI State
   const [uiMode, setUiMode] = useState<'normal' | 'flow'>(() => (localStorage.getItem('category_ui_mode') as 'normal' | 'flow') || 'normal');
+  const [viewMode, setViewMode] = useState<'grid' | 'epg'>('grid'); // New state for EPG toggle
   const [currentLevel, setCurrentLevel] = useState<'categories' | 'items' | 'detail'>('categories');
   const [selectedCategory, setSelectedCategory] = useState<XtreamCategory | null>(null);
   
@@ -529,6 +531,14 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
                         placeholder={`Chercher dans ${currentConfig.label}...`} value={searchQuery} onChange={(e) => handleSearch(e.target.value)} />
                     <Search size={15} className="absolute left-3 top-2.5 text-fluent-subtext/50" />
                 </div>
+                
+                {type === 'live' && (
+                    <Button variant="secondary" onClick={() => setViewMode(prev => prev === 'grid' ? 'epg' : 'grid')} className="!px-4 h-9 flex items-center gap-2 border-white/10 bg-white/5 hover:bg-white/10 transition-all">
+                        {viewMode === 'grid' ? <Layout size={18} /> : <List size={18} />}
+                        <span className="text-[11px] font-bold uppercase tracking-wider">{viewMode === 'grid' ? 'Guide TV' : 'Liste'}</span>
+                    </Button>
+                )}
+
                 <Button variant="secondary" onClick={() => { const nm = uiMode === 'normal' ? 'flow' : 'normal'; setUiMode(nm); localStorage.setItem('category_ui_mode', nm); }} className="!px-4 h-9 flex items-center gap-2 border-white/10 bg-white/5 hover:bg-white/10 transition-all">
                     {uiMode === 'normal' ? <Columns size={18} /> : <List size={18} />}
                     <span className="text-[11px] font-bold uppercase tracking-wider">{uiMode === 'normal' ? 'Flow' : 'Classique'}</span>
@@ -604,6 +614,13 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
                                         siblingItems={displayData}
                                         onSwitchItem={handleDetail}
                                     />
+                                ) : viewMode === 'epg' && type === 'live' ? (
+                                    <EPGView 
+                                        channels={displayData} 
+                                        account={account} 
+                                        onChannelClick={handlePlay} 
+                                        fetchCached={fetchCached} 
+                                    />
                                 ) : (
                                     <div key={selectedCategory?.category_id || 'all'} className="px-10">
                                         {heroItem && (
@@ -618,12 +635,13 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
                                                     categoryId={id} 
                                                     name={categories.find(c => c.category_id === id)?.category_name || "Catégorie"} 
                                                     items={items} 
+                                                    type={type}
                                                     onItemClick={handleGridClick} 
                                                     onExplore={(cid) => handleCategorySelect(categories.find(c => c.category_id === cid) || null)} 
                                                 />
                                             ))
                                         ) : (
-                                            <ItemGrid items={displayData} type={type} onItemClick={handleGridClick} />
+                                            <ItemGrid items={displayData} type={type} onItemClick={handleGridClick} accountId={account.id} />
                                         )}
                                         <div className="h-24" />
                                     </div>
@@ -662,6 +680,13 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
                                 onSwitchItem={handleDetail}
                             />
                         )
+                    ) : viewMode === 'epg' && type === 'live' ? (
+                         <EPGView 
+                            channels={displayData} 
+                            account={account} 
+                            onChannelClick={handlePlay} 
+                            fetchCached={fetchCached} 
+                        />
                     ) : (
                         <div className="pt-8 pb-20 relative min-h-[500px]">
                             {loading ? <SkeletonLoader type={type} mode="grid" /> : 
@@ -671,7 +696,7 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
                                         <HeroSection item={heroItem} detail={heroDetail} phase={heroPhase} isFading={isHeroFading} ytContainerId={ytContainerId} onNext={handleNextHero} onPlay={handlePlay} onInfo={handleDetail} isMuted={isTrailerMuted} onToggleMute={toggleTrailerMute} />
                                     </div>
                                 )}
-                                <ItemGrid items={displayData} type={type} onItemClick={handleGridClick} />
+                                <ItemGrid items={displayData} type={type} onItemClick={handleGridClick} accountId={account.id} />
                             </div>}
                         </div>
                     )}

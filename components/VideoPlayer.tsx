@@ -3,11 +3,12 @@ import React, { useEffect, useRef, useState } from 'react';
 import { 
   Play, Pause, Volume2, VolumeX, Maximize, Minimize, X, 
   SkipBack, SkipForward, Settings, List, ChevronLeft, ChevronRight, Square,
-  Expand, Shrink, RefreshCw, Clock
+  Expand, Shrink, RefreshCw, Clock, Info
 } from 'lucide-react';
 import Hls from 'hls.js';
 import { XtreamStream, XtreamAccount } from '../types';
 import { createProxyUrl } from '../utils';
+import { useUserPreferences } from '../hooks/useUserPreferences';
 
 interface VideoPlayerProps {
   url: string;
@@ -39,6 +40,10 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const retryTimeoutRef = useRef<number | null>(null);
   const epgIntervalRef = useRef<number | null>(null);
   
+  // Hook for Preferences
+  const { updateProgress, getProgress } = useUserPreferences(account?.id || 'guest');
+  const saveIntervalRef = useRef<number | null>(null);
+
   // Player State
   const [isPlaying, setIsPlaying] = useState(true); // Auto-play
   const [volume, setVolume] = useState(1);
@@ -49,12 +54,17 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const [showControls, setShowControls] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
   
+  // Resume State
+  const [resumePoint, setResumePoint] = useState<number | null>(null);
+  const [hasResumed, setHasResumed] = useState(false);
+
   // Retry Logic State
   const [retryCount, setRetryCount] = useState(0);
   const [isRetrying, setIsRetrying] = useState(false);
   
   // Live TV Specific State
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [showInfo, setShowInfo] = useState(false);
   
   // EPG State
   const [epgNow, setEpgNow] = useState<EpgItem | null>(null);
@@ -104,14 +114,10 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         let current: EpgItem | null = null;
         let next: EpgItem | null = null;
 
-        // Ensure sorted by start time
         const sorted = listings.sort((a, b) => a.start_timestamp - b.start_timestamp);
 
         for (let i = 0; i < sorted.length; i++) {
             const prog = sorted[i];
-            // Decode base64 title/desc if needed (Xtream sometimes sends base64)
-            // Assuming plain text for now as most modern Xtream servers send JSON plain text for short_epg
-            
             const start = parseInt(prog.start_timestamp);
             const stop = parseInt(prog.stop_timestamp);
 
@@ -122,7 +128,6 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                     start_timestamp: start,
                     stop_timestamp: stop
                 };
-                // Look ahead for next
                 if (i + 1 < sorted.length) {
                     const n = sorted[i+1];
                     next = {
@@ -136,21 +141,16 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
             }
         }
         
-        // Fallback: if no current found but we have listings, maybe we are just before the first one or logic gap
-        // For simplicity, strict time matching is best.
-        
         setEpgNow(current);
         setEpgNext(next);
     };
 
     fetchEPG();
     
-    // Set up interval to refresh EPG progress bar locally every minute
     if (epgIntervalRef.current) clearInterval(epgIntervalRef.current);
     epgIntervalRef.current = window.setInterval(() => {
-        // Just force re-render or re-calc progress
         setEpgNow(prev => prev ? {...prev} : null); 
-    }, 60000); // Update every minute
+    }, 60000); 
 
     return () => {
         if (epgIntervalRef.current) clearInterval(epgIntervalRef.current);
@@ -168,7 +168,42 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       const elapsed = now - epgNow.start_timestamp;
       const pct = Math.min(100, Math.max(0, (elapsed / total) * 100));
       setEpgProgress(pct);
-  }, [epgNow, currentTime]); // Update when video time updates (roughly every second)
+  }, [epgNow, currentTime]);
+
+  // Check for Resume Point
+  useEffect(() => {
+      if (type === 'live' || !currentItem) return;
+      
+      const id = currentItem.stream_id || currentItem.series_id || currentItem.num; // Use ID logic
+      const saved = getProgress(id);
+
+      if (saved && !saved.finished && saved.time > 10) {
+          setResumePoint(saved.time);
+      } else {
+          setResumePoint(null);
+      }
+      setHasResumed(false);
+  }, [currentItem, type]);
+
+  // Save Progress Interval
+  useEffect(() => {
+    if (type === 'live' || !currentItem) return;
+    
+    // Clear any existing interval
+    if (saveIntervalRef.current) clearInterval(saveIntervalRef.current);
+
+    saveIntervalRef.current = window.setInterval(() => {
+        if (videoRef.current && !videoRef.current.paused && videoRef.current.currentTime > 0) {
+            const id = currentItem.stream_id || currentItem.series_id || currentItem.num;
+            updateProgress(id, videoRef.current.currentTime, videoRef.current.duration);
+        }
+    }, 10000); // Save every 10 seconds
+
+    return () => {
+        if (saveIntervalRef.current) clearInterval(saveIntervalRef.current);
+    };
+  }, [currentItem, type, updateProgress]);
+
 
   // Initialize Player (HLS or Native)
   useEffect(() => {
@@ -181,9 +216,15 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
     const isHls = url.includes('.m3u8');
     
-    // Safety attempt to play that ignores AbortError
     const attemptPlay = () => {
         if (!video) return;
+        
+        // Handle Resume
+        if (resumePoint && !hasResumed) {
+            video.currentTime = resumePoint;
+            setHasResumed(true);
+        }
+
         const playPromise = video.play();
         if (playPromise !== undefined) {
             playPromise.catch(error => {
@@ -198,7 +239,6 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       hls = new Hls({
         enableWorker: true,
         lowLatencyMode: true,
-        // Tweak config for better recovery
         manifestLoadingTimeOut: 10000,
         manifestLoadingMaxRetry: 3,
         levelLoadingTimeOut: 10000,
@@ -218,21 +258,16 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
       hls.on(Hls.Events.ERROR, (event, data) => {
         console.error("HLS Error", data);
-        
         if (data.fatal) {
             switch (data.type) {
                 case Hls.ErrorTypes.MEDIA_ERROR:
-                    console.warn("Media error encountered, trying to recover...");
                     hls?.recoverMediaError();
                     break;
                 case Hls.ErrorTypes.NETWORK_ERROR:
                 default:
-                    // Fatal network error (stream cut) -> Destroy and Full Reload after 5s
-                    console.warn("Fatal network error, scheduling retry in 5s...");
                     hls?.destroy();
                     setIsLoading(true);
                     setIsRetrying(true);
-                    
                     if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
                     retryTimeoutRef.current = window.setTimeout(() => {
                         setRetryCount(prev => prev + 1);
@@ -242,12 +277,10 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         }
       });
     } else {
-      // Native (MP4, MKV if supported, or Safari HLS)
       video.src = url;
       video.load();
       attemptPlay();
       
-      // Basic native error handling for retry
       video.onerror = () => {
           console.error("Native Video Error", video.error);
           setIsLoading(true);
@@ -259,7 +292,6 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       };
     }
 
-    // Event Listeners for HTML5 Video
     const updateTime = () => setCurrentTime(video.currentTime);
     const updateDuration = () => setDuration(video.duration);
     const onWaiting = () => setIsLoading(true);
@@ -277,10 +309,16 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     video.addEventListener('pause', onPause);
 
     return () => {
+      // Save progress one last time on unmount
+      if (video && type !== 'live' && currentItem) {
+          const id = currentItem.stream_id || currentItem.series_id || currentItem.num;
+          updateProgress(id, video.currentTime, video.duration);
+      }
+
       if (hls) hls.destroy();
       if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
+      if (saveIntervalRef.current) clearInterval(saveIntervalRef.current);
       
-      // Important: Stop the video source to prevent background buffering or "interrupted" errors on next load
       if (video) {
         video.removeAttribute('src');
         video.load();
@@ -292,7 +330,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         video.onerror = null;
       }
     };
-  }, [url, retryCount]); // Dependency on retryCount forces full re-init
+  }, [url, retryCount]); 
 
   // Handle Controls Visibility
   const handleMouseMove = () => {
@@ -358,7 +396,6 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     }
   };
 
-  // Channel Navigation Logic
   const changeChannel = (direction: 'next' | 'prev') => {
       if (!playlist || !currentItem || !onChannelSelect) return;
       
@@ -366,15 +403,12 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       if (idx === -1) return;
 
       let newIdx = direction === 'next' ? idx + 1 : idx - 1;
-      
-      // Loop or Clamp? Looping is better for TV
       if (newIdx >= playlist.length) newIdx = 0;
       if (newIdx < 0) newIdx = playlist.length - 1;
 
       onChannelSelect(playlist[newIdx]);
   };
 
-  // Format Time
   const formatTime = (time: number) => {
     if (isNaN(time)) return "00:00";
     const hours = Math.floor(time / 3600);
@@ -387,16 +421,10 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
   };
 
-  // Helper to check base64 (Simple check)
   const isBase64 = (str: string) => {
-      try {
-          return btoa(atob(str)) === str;
-      } catch (err) {
-          return false;
-      }
+      try { return btoa(atob(str)) === str; } catch (err) { return false; }
   };
   
-  // Format EPG Time
   const formatEpgTime = (timestamp: number) => {
       return new Date(timestamp * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
@@ -409,12 +437,10 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       if (e.key === 'f') toggleFullscreen();
       if (e.key === 's') handleStop();
       
-      // VOD/Series Skip
       if (type !== 'live') {
         if (e.key === 'ArrowRight') skip(10);
         if (e.key === 'ArrowLeft') skip(-10);
       } else {
-        // Live TV Channel Switch
         if (e.key === 'ArrowRight') changeChannel('next');
         if (e.key === 'ArrowLeft') changeChannel('prev');
       }
@@ -425,7 +451,6 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isPlaying, isMuted, isFullscreen, type, playlist, currentItem]);
 
-  // Determine root classes based on Embedded state
   const rootClasses = isEmbedded 
     ? "absolute inset-0 z-50 bg-black flex flex-col items-center justify-center animate-in fade-in duration-300 overflow-hidden"
     : "fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center animate-in fade-in duration-300 overflow-hidden";
@@ -436,6 +461,13 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       onMouseMove={handleMouseMove}
       className={rootClasses}
     >
+        {/* Resume Toast */}
+        {resumePoint && !hasResumed && isLoading && (
+             <div className="absolute top-20 left-1/2 -translate-x-1/2 bg-fluent-accent/90 text-black px-4 py-2 rounded-full z-50 shadow-lg font-medium animate-in slide-in-from-top-4 fade-in">
+                 Reprise de la lecture à {formatTime(resumePoint)}...
+             </div>
+        )}
+
         {/* Loading Spinner */}
         {isLoading && (
             <div className="absolute inset-0 flex flex-col items-center justify-center z-10 pointer-events-none bg-black/40 backdrop-blur-sm">
@@ -543,12 +575,10 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                                  </div>
                              )}
                          </div>
-                         {/* EPG Progress Percentage */}
                          <div className="text-xs font-mono text-fluent-accent/80 font-bold mb-1">
                              {Math.round(epgProgress)}%
                          </div>
                     </div>
-                    {/* EPG Progress Bar */}
                     <div className="w-full h-1 bg-white/10 rounded-full overflow-hidden">
                         <div 
                            className="h-full bg-fluent-accent shadow-[0_0_8px_rgba(96,205,255,0.6)] transition-all duration-1000 ease-linear"
@@ -575,26 +605,20 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                     />
                 </div>
             ) : !epgNow && (
-                // Divider for Live TV to separate visual if no EPG
                 <div className="w-full h-[1px] bg-white/10 mb-1" />
             )}
 
             {/* Row 2: Control Buttons */}
             <div className="flex items-center justify-between px-4 py-2">
-                
-                {/* Left Group: Playback & Volume */}
                 <div className="flex items-center gap-4">
-                    {/* Play/Pause */}
                     <button onClick={togglePlay} className="text-white hover:text-orange-400 transition-colors" title={isPlaying ? "Pause" : "Lecture"}>
                         {isPlaying ? <Pause size={24} fill="currentColor" /> : <Play size={24} fill="currentColor" />}
                     </button>
                     
-                    {/* Stop */}
                     <button onClick={handleStop} className="text-white/70 hover:text-white transition-colors" title="Arrêter">
                         <Square size={18} fill="currentColor" />
                     </button>
 
-                    {/* Navigation (Skip or Channel) */}
                     <div className="flex items-center gap-1 mx-2">
                         {type === 'live' ? (
                             <>
@@ -617,7 +641,6 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                         )}
                     </div>
 
-                    {/* Volume */}
                     <div className="flex items-center gap-2 group">
                         <button onClick={toggleMute} className="text-white/80 hover:text-white" title="Volume">
                              {isMuted ? <VolumeX size={20} /> : <Volume2 size={20} />}
@@ -634,9 +657,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                     </div>
                 </div>
 
-                {/* Right Group: Time & Tools */}
                 <div className="flex items-center gap-4">
-                    {/* Time Display */}
                     {type !== 'live' && (
                         <div className="text-xs font-mono text-white/80 select-none">
                             <span>{formatTime(currentTime)}</span>
@@ -653,7 +674,6 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
                     <div className="h-4 w-[1px] bg-white/10 mx-1" />
 
-                    {/* Channel List (Live) */}
                     {type === 'live' && (
                         <button 
                             onClick={() => setIsSidebarOpen(!isSidebarOpen)} 
@@ -663,6 +683,55 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                             <List size={20} />
                         </button>
                     )}
+
+  const [showInfo, setShowInfo] = useState(false);
+
+  // ... (rest of state)
+
+  // ... (inside return)
+        {/* Info Overlay */}
+        {showInfo && (
+            <div className="absolute inset-0 z-40 bg-black/80 backdrop-blur-md flex items-center justify-center p-8 animate-in fade-in duration-200" onClick={() => setShowInfo(false)}>
+                <div className="max-w-2xl w-full bg-[#1e1e1e] border border-white/10 rounded-xl p-6 shadow-2xl relative" onClick={e => e.stopPropagation()}>
+                    <button onClick={() => setShowInfo(false)} className="absolute top-4 right-4 text-white/50 hover:text-white transition-colors">
+                        <X size={24} />
+                    </button>
+                    
+                    <h2 className="text-2xl font-bold text-white mb-2">{epgNow?.title || title}</h2>
+                    
+                    {epgNow && (
+                        <div className="flex items-center gap-3 text-sm text-fluent-accent font-mono mb-4">
+                            <Clock size={16} />
+                            <span>{formatEpgTime(epgNow.start_timestamp)} - {formatEpgTime(epgNow.stop_timestamp)}</span>
+                        </div>
+                    )}
+
+                    <div className="text-white/80 leading-relaxed text-lg max-h-[60vh] overflow-y-auto custom-scrollbar pr-2">
+                        {epgNow?.description || (currentItem as any)?.plot || "Aucune description disponible."}
+                    </div>
+
+                    {epgNext && (
+                        <div className="mt-6 pt-4 border-t border-white/10">
+                            <h4 className="text-sm font-bold text-white/50 uppercase tracking-wider mb-2">À suivre</h4>
+                            <div className="flex justify-between items-center">
+                                <span className="text-white font-medium">{epgNext.title}</span>
+                                <span className="text-fluent-accent text-sm font-mono">{formatEpgTime(epgNext.start_timestamp)}</span>
+                            </div>
+                            {epgNext.description && (
+                                <p className="text-white/50 text-sm mt-1 line-clamp-2">{epgNext.description}</p>
+                            )}
+                        </div>
+                    )}
+                </div>
+            </div>
+        )}
+
+        {/* ... (rest of JSX) */}
+
+        {/* In Controls Bar */}
+                    <button onClick={() => setShowInfo(!showInfo)} className={`transition-colors ${showInfo ? 'text-fluent-accent' : 'text-white/70 hover:text-white'}`} title="Informations">
+                        <Info size={20} />
+                    </button>
 
                     <button className="text-white/70 hover:text-white" title="Paramètres">
                         <Settings size={20} />
