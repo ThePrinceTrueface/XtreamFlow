@@ -12,6 +12,31 @@ interface StreamListSidebarProps {
   title: string;
 }
 
+// Helper to decode Base64 strings safely and fix encoding issues
+const decodeBase64 = (str: string) => {
+    if (!str) return "";
+    let decoded = str;
+
+    // 1. Try Base64 decoding if it looks like Base64 (no spaces, valid chars)
+    if (!str.includes(' ') && /^([A-Za-z0-9+/]{4})*([A-Za-z0-9+/]{3}=|[A-Za-z0-9+/]{2}==)?$/.test(str)) {
+         try {
+             const raw = window.atob(str);
+             if (!/[\x00-\x08\x0B\x0C\x0E-\x1F]/.test(raw)) {
+                 decoded = raw;
+             }
+         } catch (e) {
+             // Not base64
+         }
+    }
+
+    // 2. Fix UTF-8 interpreted as Latin-1 (Mojibake)
+    try {
+        return decodeURIComponent(escape(decoded));
+    } catch (e) {
+        return decoded;
+    }
+};
+
 export const StreamListSidebar: React.FC<StreamListSidebarProps> = ({ 
   items, selectedItem, onSelect, onClose, title 
 }) => {
@@ -78,7 +103,7 @@ export const StreamListSidebar: React.FC<StreamListSidebarProps> = ({
                  {/* Text */}
                  <div className="min-w-0 flex-1">
                    <p className={`text-[12px] font-medium truncate ${isActive ? 'text-white' : 'text-white/80 group-hover:text-white'}`}>
-                     {item.name}
+                     {decodeBase64(item.name)}
                    </p>
                    {item.rating && (
                      <div className="flex items-center gap-1 mt-0.5">

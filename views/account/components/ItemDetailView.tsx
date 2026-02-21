@@ -424,7 +424,7 @@ export const ItemDetailView: React.FC<ItemDetailViewProps> = ({ item, detail, lo
                                                     {ep.episode_num}.
                                                 </span>
                                                 <h4 className="text-white font-semibold text-lg truncate group-hover:text-fluent-accent transition-colors">
-                                                    {ep.title}
+                                                    {decodeBase64(ep.title)}
                                                 </h4>
                                             </div>
                                             
@@ -437,7 +437,7 @@ export const ItemDetailView: React.FC<ItemDetailViewProps> = ({ item, detail, lo
                                                 )}
                                             </div>
                                             <p className="text-sm text-white/70 line-clamp-2 leading-relaxed">
-                                                {ep.info?.plot || "Pas de description disponible."}
+                                                {decodeBase64(ep.info?.plot || "Pas de description disponible.")}
                                             </p>
                                         </div>
 
@@ -503,7 +503,7 @@ export const ItemDetailView: React.FC<ItemDetailViewProps> = ({ item, detail, lo
                                             </div>
                                         </div>
                                         <h4 className="text-xs font-medium mt-3 truncate group-hover:text-fluent-accent transition-colors">
-                                            {relatedItem.name}
+                                            {decodeBase64(relatedItem.name)}
                                         </h4>
                                         {relatedItem.rating && (
                                             <div className="flex items-center gap-1 text-[10px] text-yellow-500/80 mt-1">

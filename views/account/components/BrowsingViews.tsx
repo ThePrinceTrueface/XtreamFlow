@@ -12,6 +12,31 @@ interface ItemGridProps {
   accountId?: string;
 }
 
+// Helper to decode Base64 strings safely and fix encoding issues
+const decodeBase64 = (str: string) => {
+    if (!str) return "";
+    let decoded = str;
+
+    // 1. Try Base64 decoding if it looks like Base64 (no spaces, valid chars)
+    if (!str.includes(' ') && /^([A-Za-z0-9+/]{4})*([A-Za-z0-9+/]{3}=|[A-Za-z0-9+/]{2}==)?$/.test(str)) {
+         try {
+             const raw = window.atob(str);
+             if (!/[\x00-\x08\x0B\x0C\x0E-\x1F]/.test(raw)) {
+                 decoded = raw;
+             }
+         } catch (e) {
+             // Not base64
+         }
+    }
+
+    // 2. Fix UTF-8 interpreted as Latin-1 (Mojibake)
+    try {
+        return decodeURIComponent(escape(decoded));
+    } catch (e) {
+        return decoded;
+    }
+};
+
 export const ItemGrid: React.FC<ItemGridProps> = ({ items, type, onItemClick, accountId = 'guest' }) => {
   const [displayLimit, setDisplayLimit] = useState(60);
   const { getProgress, isFavorite } = useUserPreferences(accountId);
@@ -71,8 +96,8 @@ export const ItemGrid: React.FC<ItemGridProps> = ({ items, type, onItemClick, ac
 
               {/* Normalized Info Section */}
               <div className="p-3 border-t border-white/5">
-                <h4 className="text-[13px] font-medium truncate mb-1 text-white group-hover:text-fluent-accent transition-colors" title={item.name}>
-                    {item.name}
+                <h4 className="text-[13px] font-medium truncate mb-1 text-white group-hover:text-fluent-accent transition-colors" title={decodeBase64(item.name)}>
+                    {decodeBase64(item.name)}
                 </h4>
                 {item.rating && (
                     <div className="flex items-center gap-1 text-[11px] text-white/50">
@@ -161,7 +186,7 @@ export const HorizontalRow: React.FC<HorizontalRowProps> = ({ categoryId, name, 
                 </div>
 
                 <div className="p-2.5 border-t border-white/5">
-                    <h4 className="text-[12px] font-medium truncate text-white group-hover:text-fluent-accent transition-colors leading-tight">{item.name}</h4>
+                    <h4 className="text-[12px] font-medium truncate text-white group-hover:text-fluent-accent transition-colors leading-tight">{decodeBase64(item.name)}</h4>
                 </div>
               </div>
             ))}

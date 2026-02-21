@@ -167,8 +167,8 @@ export const EPGView: React.FC<EPGViewProps> = ({ channels, account, onChannelCl
   const [currentTime, setCurrentTime] = useState(Date.now());
   
   const headerScrollRef = useRef<HTMLDivElement>(null);
-  const gridListRef = useRef<List>(null);
-  const sidebarListRef = useRef<List>(null);
+  const gridListRef = useRef<any>(null);
+  const sidebarListRef = useRef<any>(null);
 
   // Time window: Start 2 hours ago, end 24 hours from now
   const startTime = useMemo(() => {

@@ -17,6 +17,31 @@ interface HeroSectionProps {
   onToggleMute?: () => void;
 }
 
+// Helper to decode Base64 strings safely and fix encoding issues
+const decodeBase64 = (str: string) => {
+    if (!str) return "";
+    let decoded = str;
+
+    // 1. Try Base64 decoding if it looks like Base64 (no spaces, valid chars)
+    if (!str.includes(' ') && /^([A-Za-z0-9+/]{4})*([A-Za-z0-9+/]{3}=|[A-Za-z0-9+/]{2}==)?$/.test(str)) {
+         try {
+             const raw = window.atob(str);
+             if (!/[\x00-\x08\x0B\x0C\x0E-\x1F]/.test(raw)) {
+                 decoded = raw;
+             }
+         } catch (e) {
+             // Not base64
+         }
+    }
+
+    // 2. Fix UTF-8 interpreted as Latin-1 (Mojibake)
+    try {
+        return decodeURIComponent(escape(decoded));
+    } catch (e) {
+        return decoded;
+    }
+};
+
 export const HeroSection: React.FC<HeroSectionProps> = ({ 
   item, detail, phase, isFading, ytContainerId, onNext, onPlay, onInfo, isMuted, onToggleMute 
 }) => {
@@ -25,7 +50,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
   
   // Récupération et nettoyage des genres
   const rawGenre = detail?.info?.genre || item.genre;
-  const genres = rawGenre ? rawGenre.split(/,|;/).map((g: string) => g.trim()).filter(Boolean).slice(0, 3) : [];
+  const genres = rawGenre ? rawGenre.split(/,|;/).map((g: string) => decodeBase64(g.trim())).filter(Boolean).slice(0, 3) : [];
 
   return (
     <div className={`relative w-full h-[420px] mb-8 rounded-window overflow-hidden group shadow-window transition-opacity duration-500 ring-1 ring-white/10 ${isFading ? 'opacity-0' : 'opacity-100'}`}>
@@ -75,9 +100,9 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                 </div>
             )}
 
-            <h1 className="text-3xl font-bold text-white mb-2 line-clamp-2 drop-shadow-md">{item.name}</h1>
+            <h1 className="text-3xl font-bold text-white mb-2 line-clamp-2 drop-shadow-md">{decodeBase64(item.name)}</h1>
             <p className="text-sm text-white/80 line-clamp-2 mb-6 max-w-xl leading-relaxed font-medium">
-              {item.plot || "Un titre exceptionnel à découvrir immédiatement dans votre catalogue streaming."}
+              {decodeBase64(item.plot) || "Un titre exceptionnel à découvrir immédiatement dans votre catalogue streaming."}
             </p>
             <div className="flex items-center gap-3">
               <Button variant="primary" onClick={() => onPlay(item)} className="!px-6 h-10 font-semibold shadow-lg">

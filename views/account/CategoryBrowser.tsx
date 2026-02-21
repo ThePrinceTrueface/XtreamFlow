@@ -55,6 +55,8 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
   } | null>(null);
   const [isPlayerExpanded, setIsPlayerExpanded] = useState(false);
   const [showStreamList, setShowStreamList] = useState(true); // Toggle for side-by-side stream list
+  const [epgPlayerHeight, setEpgPlayerHeight] = useState(220);
+  const [isResizingEpgPlayer, setIsResizingEpgPlayer] = useState(false);
 
   // Refs
   const heroTimeoutRef = useRef<number | null>(null);
@@ -264,6 +266,20 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
     }
     return () => { if (checkInterval) clearInterval(checkInterval); };
   }, [heroPhase, heroDetail, ytContainerId, handleNextHero]);
+
+  useEffect(() => {
+    if (!isResizingEpgPlayer) return;
+    const handleMouseMove = (e: MouseEvent) => {
+        setEpgPlayerHeight(Math.max(120, Math.min(e.clientY - 120, 600)));
+    };
+    const handleMouseUp = () => setIsResizingEpgPlayer(false);
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => {
+        window.removeEventListener('mousemove', handleMouseMove);
+        window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizingEpgPlayer]);
 
   const loadCategories = useCallback(async () => {
     setLoading(true);
@@ -502,7 +518,7 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
         `}</style>
 
         {/* Global Player for Normal Mode */}
-        {player && uiMode === 'normal' && (
+        {player && uiMode === 'normal' && viewMode !== 'epg' && (
             <VideoPlayer 
                 url={player.url} 
                 title={player.title} 
@@ -555,7 +571,7 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
                     {/* Pane 2 & 3: Content or (Stream List + Player) */}
                     <div className="flex-1 flex overflow-hidden relative h-full">
                         {/* Player Active Layout */}
-                        {player ? (
+                        {player && viewMode !== 'epg' ? (
                             <>
                                 {/* Pane 2: Stream List Sidebar (Collapsible) */}
                                 {showStreamList && (
@@ -615,12 +631,46 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
                                         onSwitchItem={handleDetail}
                                     />
                                 ) : viewMode === 'epg' && type === 'live' ? (
-                                    <EPGView 
-                                        channels={displayData} 
-                                        account={account} 
-                                        onChannelClick={handlePlay} 
-                                        fetchCached={fetchCached} 
-                                    />
+                                    <div className="relative h-full flex flex-col overflow-hidden w-full">
+                                        {player && (
+                                            <div 
+                                                className={`absolute z-40 bg-black shadow-2xl border-b border-white/10 transition-all duration-300
+                                                    ${isPlayerExpanded ? 'inset-x-0 top-0 h-1/2' : 'top-[40px] left-0 w-[220px]'}
+                                                `}
+                                                style={{ height: isPlayerExpanded ? undefined : epgPlayerHeight }}
+                                            >
+                                                <VideoPlayer 
+                                                    url={player.url} 
+                                                    title={player.title} 
+                                                    type={player.type} 
+                                                    onClose={handleClosePlayer}
+                                                    playlist={type === 'live' ? displayData : undefined}
+                                                    currentItem={player.currentItem}
+                                                    onChannelSelect={handlePlay}
+                                                    isEmbedded={true}
+                                                    onToggleEmbed={() => setIsPlayerExpanded(!isPlayerExpanded)}
+                                                    account={account}
+                                                />
+                                                {!isPlayerExpanded && (
+                                                    <div 
+                                                        className="absolute bottom-0 inset-x-0 h-1 cursor-ns-resize bg-white/10 hover:bg-fluent-accent transition-colors z-50"
+                                                        onMouseDown={(e) => {
+                                                            e.preventDefault();
+                                                            setIsResizingEpgPlayer(true);
+                                                        }}
+                                                    />
+                                                )}
+                                            </div>
+                                        )}
+                                        <div className="flex-1 overflow-hidden">
+                                            <EPGView 
+                                                channels={displayData} 
+                                                account={account} 
+                                                onChannelClick={handlePlay} 
+                                                fetchCached={fetchCached} 
+                                            />
+                                        </div>
+                                    </div>
                                 ) : (
                                     <div key={selectedCategory?.category_id || 'all'} className="px-10">
                                         {heroItem && (
@@ -681,12 +731,46 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
                             />
                         )
                     ) : viewMode === 'epg' && type === 'live' ? (
-                         <EPGView 
-                            channels={displayData} 
-                            account={account} 
-                            onChannelClick={handlePlay} 
-                            fetchCached={fetchCached} 
-                        />
+                         <div className="relative h-full flex flex-col overflow-hidden w-full min-h-[600px]">
+                            {player && (
+                                <div 
+                                    className={`absolute z-40 bg-black shadow-2xl border-b border-white/10 transition-all duration-300
+                                        ${isPlayerExpanded ? 'inset-x-0 top-0 h-1/2' : 'top-[40px] left-0 w-[220px]'}
+                                    `}
+                                    style={{ height: isPlayerExpanded ? undefined : epgPlayerHeight }}
+                                >
+                                    <VideoPlayer 
+                                        url={player.url} 
+                                        title={player.title} 
+                                        type={player.type} 
+                                        onClose={handleClosePlayer}
+                                        playlist={type === 'live' ? displayData : undefined}
+                                        currentItem={player.currentItem}
+                                        onChannelSelect={handlePlay}
+                                        isEmbedded={true}
+                                        onToggleEmbed={() => setIsPlayerExpanded(!isPlayerExpanded)}
+                                        account={account}
+                                    />
+                                    {!isPlayerExpanded && (
+                                        <div 
+                                            className="absolute bottom-0 inset-x-0 h-1 cursor-ns-resize bg-white/10 hover:bg-fluent-accent transition-colors z-50"
+                                            onMouseDown={(e) => {
+                                                e.preventDefault();
+                                                setIsResizingEpgPlayer(true);
+                                            }}
+                                        />
+                                    )}
+                                </div>
+                            )}
+                            <div className="flex-1 overflow-hidden">
+                                <EPGView 
+                                    channels={displayData} 
+                                    account={account} 
+                                    onChannelClick={handlePlay} 
+                                    fetchCached={fetchCached} 
+                                />
+                            </div>
+                        </div>
                     ) : (
                         <div className="pt-8 pb-20 relative min-h-[500px]">
                             {loading ? <SkeletonLoader type={type} mode="grid" /> : 

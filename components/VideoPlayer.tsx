@@ -30,6 +30,31 @@ interface EpgItem {
   description: string;
 }
 
+// Helper to decode Base64 strings safely and fix encoding issues
+const decodeBase64 = (str: string) => {
+    if (!str) return "";
+    let decoded = str;
+
+    // 1. Try Base64 decoding if it looks like Base64 (no spaces, valid chars)
+    if (!str.includes(' ') && /^([A-Za-z0-9+/]{4})*([A-Za-z0-9+/]{3}=|[A-Za-z0-9+/]{2}==)?$/.test(str)) {
+         try {
+             const raw = window.atob(str);
+             if (!/[\x00-\x08\x0B\x0C\x0E-\x1F]/.test(raw)) {
+                 decoded = raw;
+             }
+         } catch (e) {
+             // Not base64
+         }
+    }
+
+    // 2. Fix UTF-8 interpreted as Latin-1 (Mojibake)
+    try {
+        return decodeURIComponent(escape(decoded));
+    } catch (e) {
+        return decoded;
+    }
+};
+
 export const VideoPlayer: React.FC<VideoPlayerProps> = ({ 
     url, title, type, onClose, playlist, currentItem, onChannelSelect,
     isEmbedded = false, onToggleEmbed, account
@@ -123,16 +148,16 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
             if (now >= start && now < stop) {
                 current = {
-                    title: prog.title && isBase64(prog.title) ? atob(prog.title) : prog.title,
-                    description: prog.description && isBase64(prog.description) ? atob(prog.description) : prog.description,
+                    title: decodeBase64(prog.title),
+                    description: decodeBase64(prog.description),
                     start_timestamp: start,
                     stop_timestamp: stop
                 };
                 if (i + 1 < sorted.length) {
                     const n = sorted[i+1];
                     next = {
-                        title: n.title && isBase64(n.title) ? atob(n.title) : n.title,
-                        description: n.description && isBase64(n.description) ? atob(n.description) : n.description,
+                        title: decodeBase64(n.title),
+                        description: decodeBase64(n.description),
                         start_timestamp: parseInt(n.start_timestamp),
                         stop_timestamp: parseInt(n.stop_timestamp)
                     };
@@ -489,6 +514,43 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
             onDoubleClick={onToggleEmbed ? onToggleEmbed : toggleFullscreen}
         />
 
+        {/* Info Overlay */}
+        {showInfo && (
+            <div className="absolute inset-0 z-40 bg-black/80 backdrop-blur-md flex items-center justify-center p-8 animate-in fade-in duration-200" onClick={() => setShowInfo(false)}>
+                <div className="max-w-2xl w-full bg-[#1e1e1e] border border-white/10 rounded-xl p-6 shadow-2xl relative" onClick={e => e.stopPropagation()}>
+                    <button onClick={() => setShowInfo(false)} className="absolute top-4 right-4 text-white/50 hover:text-white transition-colors">
+                        <X size={24} />
+                    </button>
+                    
+                    <h2 className="text-2xl font-bold text-white mb-2">{epgNow?.title || decodeBase64(title)}</h2>
+                    
+                    {epgNow && (
+                        <div className="flex items-center gap-3 text-sm text-fluent-accent font-mono mb-4">
+                            <Clock size={16} />
+                            <span>{formatEpgTime(epgNow.start_timestamp)} - {formatEpgTime(epgNow.stop_timestamp)}</span>
+                        </div>
+                    )}
+
+                    <div className="text-white/80 leading-relaxed text-lg max-h-[60vh] overflow-y-auto custom-scrollbar pr-2">
+                        {epgNow?.description || (currentItem as any)?.plot || "Aucune description disponible."}
+                    </div>
+
+                    {epgNext && (
+                        <div className="mt-6 pt-4 border-t border-white/10">
+                            <h4 className="text-sm font-bold text-white/50 uppercase tracking-wider mb-2">À suivre</h4>
+                            <div className="flex justify-between items-center">
+                                <span className="text-white font-medium">{epgNext.title}</span>
+                                <span className="text-fluent-accent text-sm font-mono">{formatEpgTime(epgNext.start_timestamp)}</span>
+                            </div>
+                            {epgNext.description && (
+                                <p className="text-white/50 text-sm mt-1 line-clamp-2">{epgNext.description}</p>
+                            )}
+                        </div>
+                    )}
+                </div>
+            </div>
+        )}
+
         {/* Live TV Sidebar Overlay */}
         {type === 'live' && playlist && (
             <div 
@@ -520,7 +582,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                                 </div>
                                 <div className="min-w-0">
                                     <p className={`text-sm font-medium truncate ${isActive ? 'text-fluent-accent' : 'text-white/80 group-hover:text-white'}`}>
-                                        {item.name}
+                                        {decodeBase64(item.name)}
                                     </p>
                                 </div>
                                 {isActive && (
@@ -534,11 +596,11 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         )}
 
         {/* Top Bar (Title & Close) */}
-        <div className={`absolute top-0 left-0 right-0 p-4 bg-gradient-to-b from-black/80 to-transparent transition-opacity duration-300 ${showControls ? 'opacity-100' : 'opacity-0'}`}>
+        <div className={`absolute top-0 left-0 right-0 p-4 bg-gradient-to-b from-black/80 to-transparent transition-opacity duration-300 z-30 ${showControls ? 'opacity-100' : 'opacity-0'}`}>
             <div className="flex justify-between items-center">
                 <div className="flex items-center gap-2">
                     <span className="bg-fluent-accent text-black text-xs font-bold px-2 py-0.5 rounded uppercase">{type}</span>
-                    <h2 className="text-white font-medium text-lg drop-shadow-md truncate max-w-2xl">{title}</h2>
+                    <h2 className="text-white font-medium text-lg drop-shadow-md truncate max-w-2xl">{decodeBase64(title)}</h2>
                 </div>
                 <div className="flex items-center gap-2">
                     {onToggleEmbed && (
@@ -684,51 +746,6 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                         </button>
                     )}
 
-  const [showInfo, setShowInfo] = useState(false);
-
-  // ... (rest of state)
-
-  // ... (inside return)
-        {/* Info Overlay */}
-        {showInfo && (
-            <div className="absolute inset-0 z-40 bg-black/80 backdrop-blur-md flex items-center justify-center p-8 animate-in fade-in duration-200" onClick={() => setShowInfo(false)}>
-                <div className="max-w-2xl w-full bg-[#1e1e1e] border border-white/10 rounded-xl p-6 shadow-2xl relative" onClick={e => e.stopPropagation()}>
-                    <button onClick={() => setShowInfo(false)} className="absolute top-4 right-4 text-white/50 hover:text-white transition-colors">
-                        <X size={24} />
-                    </button>
-                    
-                    <h2 className="text-2xl font-bold text-white mb-2">{epgNow?.title || title}</h2>
-                    
-                    {epgNow && (
-                        <div className="flex items-center gap-3 text-sm text-fluent-accent font-mono mb-4">
-                            <Clock size={16} />
-                            <span>{formatEpgTime(epgNow.start_timestamp)} - {formatEpgTime(epgNow.stop_timestamp)}</span>
-                        </div>
-                    )}
-
-                    <div className="text-white/80 leading-relaxed text-lg max-h-[60vh] overflow-y-auto custom-scrollbar pr-2">
-                        {epgNow?.description || (currentItem as any)?.plot || "Aucune description disponible."}
-                    </div>
-
-                    {epgNext && (
-                        <div className="mt-6 pt-4 border-t border-white/10">
-                            <h4 className="text-sm font-bold text-white/50 uppercase tracking-wider mb-2">À suivre</h4>
-                            <div className="flex justify-between items-center">
-                                <span className="text-white font-medium">{epgNext.title}</span>
-                                <span className="text-fluent-accent text-sm font-mono">{formatEpgTime(epgNext.start_timestamp)}</span>
-                            </div>
-                            {epgNext.description && (
-                                <p className="text-white/50 text-sm mt-1 line-clamp-2">{epgNext.description}</p>
-                            )}
-                        </div>
-                    )}
-                </div>
-            </div>
-        )}
-
-        {/* ... (rest of JSX) */}
-
-        {/* In Controls Bar */}
                     <button onClick={() => setShowInfo(!showInfo)} className={`transition-colors ${showInfo ? 'text-fluent-accent' : 'text-white/70 hover:text-white'}`} title="Informations">
                         <Info size={20} />
                     </button>
