@@ -19,7 +19,9 @@ interface VideoPlayerProps {
   currentItem?: XtreamStream;
   onChannelSelect?: (item: XtreamStream) => void;
   isEmbedded?: boolean;
+  isMini?: boolean;
   onToggleEmbed?: () => void;
+  onMaximize?: () => void;
   account?: XtreamAccount;
 }
 
@@ -57,7 +59,7 @@ const decodeBase64 = (str: string) => {
 
 export const VideoPlayer: React.FC<VideoPlayerProps> = ({ 
     url, title, type, onClose, playlist, currentItem, onChannelSelect,
-    isEmbedded = false, onToggleEmbed, account
+    isEmbedded = false, isMini = false, onToggleEmbed, onMaximize, account
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -596,40 +598,56 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         )}
 
         {/* Top Bar (Title & Close) */}
-        <div className={`absolute top-0 left-0 right-0 p-4 bg-gradient-to-b from-black/80 to-transparent transition-opacity duration-300 z-30 ${showControls ? 'opacity-100' : 'opacity-0'}`}>
-            <div className="flex justify-between items-center">
-                <div className="flex items-center gap-2">
-                    <span className="bg-fluent-accent text-black text-xs font-bold px-2 py-0.5 rounded uppercase">{type}</span>
-                    <h2 className="text-white font-medium text-lg drop-shadow-md truncate max-w-2xl">{decodeBase64(title)}</h2>
-                </div>
-                <div className="flex items-center gap-2">
-                    {onToggleEmbed && (
-                        <button onClick={onToggleEmbed} className="text-white/80 hover:text-white p-2 rounded-full hover:bg-white/10 transition-colors" title={isEmbedded ? "Agrandir" : "Réduire"}>
-                             {isEmbedded ? <Expand size={20} /> : <Shrink size={20} />}
+        {!isMini && (
+            <div className={`absolute top-0 left-0 right-0 p-4 bg-gradient-to-b from-black/80 to-transparent transition-opacity duration-300 z-30 ${showControls ? 'opacity-100' : 'opacity-0'}`}>
+                <div className="flex justify-between items-center">
+                    <div className="flex items-center gap-2">
+                        <span className="bg-fluent-accent text-black text-xs font-bold px-2 py-0.5 rounded uppercase">{type}</span>
+                        <h2 className="text-white font-medium text-lg drop-shadow-md truncate max-w-2xl">{decodeBase64(title)}</h2>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        {onToggleEmbed && (
+                            <button onClick={onToggleEmbed} className="text-white/80 hover:text-white p-2 rounded-full hover:bg-white/10 transition-colors" title={isEmbedded ? "Agrandir" : "Réduire"}>
+                                 {isEmbedded ? <Expand size={20} /> : <Shrink size={20} />}
+                            </button>
+                        )}
+                        <button onClick={onClose} className="text-white/80 hover:text-white p-2 rounded-full hover:bg-white/10 transition-colors">
+                            <X size={24} />
                         </button>
-                    )}
-                    <button onClick={onClose} className="text-white/80 hover:text-white p-2 rounded-full hover:bg-white/10 transition-colors">
-                        <X size={24} />
-                    </button>
+                    </div>
                 </div>
             </div>
-        </div>
+        )}
+
+        {/* Mini Top Bar (Close only) */}
+        {isMini && (
+            <div className={`absolute top-0 right-0 p-2 z-30 transition-opacity duration-300 ${showControls ? 'opacity-100' : 'opacity-0'}`}>
+                <button onClick={onClose} className="text-white/80 hover:text-white p-1.5 rounded-full hover:bg-white/20 transition-colors bg-black/40 backdrop-blur-sm">
+                    <X size={18} />
+                </button>
+            </div>
+        )}
 
         {/* Bottom Controls (VLC Style) */}
         <div className={`absolute bottom-0 left-0 right-0 bg-[#111111]/95 backdrop-blur-md border-t border-white/10 transition-transform duration-300 z-30 pb-2 ${showControls ? 'translate-y-0' : 'translate-y-full'}`}>
             
             {/* Live TV EPG Overlay */}
             {type === 'live' && epgNow && (
-                <div className="px-4 pt-3 pb-1 border-b border-white/5 animate-in slide-in-from-bottom-2">
+                <div className={`px-4 pt-3 pb-1 border-b border-white/5 animate-in slide-in-from-bottom-2 ${isMini ? 'pt-1 pb-0 px-2' : ''}`}>
                     <div className="flex items-end justify-between mb-1">
                          <div className="min-w-0 flex-1 mr-4">
-                             <div className="flex items-center gap-2 mb-1">
-                                 <h3 className="text-white font-bold text-lg truncate leading-tight drop-shadow-sm">{epgNow.title}</h3>
-                                 <span className="text-xs text-fluent-accent font-mono bg-fluent-accent/10 px-1.5 py-0.5 rounded border border-fluent-accent/20">
-                                     {formatEpgTime(epgNow.start_timestamp)} - {formatEpgTime(epgNow.stop_timestamp)}
-                                 </span>
-                             </div>
-                             {epgNext && (
+                             {!isMini && (
+                                 <div className="flex items-center gap-2 mb-1">
+                                     <h3 className="text-white font-bold text-lg truncate leading-tight drop-shadow-sm">{epgNow.title}</h3>
+                                     <span className="text-xs text-fluent-accent font-mono bg-fluent-accent/10 px-1.5 py-0.5 rounded border border-fluent-accent/20">
+                                         {formatEpgTime(epgNow.start_timestamp)} - {formatEpgTime(epgNow.stop_timestamp)}
+                                     </span>
+                                 </div>
+                             )}
+                             {isMini && (
+                                 <div className="text-[10px] text-white font-bold truncate mb-0.5">{epgNow.title}</div>
+                             )}
+                             {!isMini && epgNext && (
                                  <div className="text-white/50 text-xs truncate flex items-center gap-1">
                                      <span className="uppercase font-bold tracking-wider text-[10px] opacity-70">À suivre :</span> 
                                      <span className="text-white/70">{epgNext.title}</span>
@@ -637,11 +655,11 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                                  </div>
                              )}
                          </div>
-                         <div className="text-xs font-mono text-fluent-accent/80 font-bold mb-1">
+                         <div className={`text-xs font-mono text-fluent-accent/80 font-bold mb-1 ${isMini ? 'text-[9px] mb-0' : ''}`}>
                              {Math.round(epgProgress)}%
                          </div>
                     </div>
-                    <div className="w-full h-1 bg-white/10 rounded-full overflow-hidden">
+                    <div className={`w-full h-1 bg-white/10 rounded-full overflow-hidden ${isMini ? 'h-0.5' : ''}`}>
                         <div 
                            className="h-full bg-fluent-accent shadow-[0_0_8px_rgba(96,205,255,0.6)] transition-all duration-1000 ease-linear"
                            style={{ width: `${epgProgress}%` }}
@@ -652,7 +670,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
             {/* Row 1: Timeline (Seek Bar) - VOD Only */}
             {type !== 'live' ? (
-                <div className="w-full relative h-1.5 bg-white/20 cursor-pointer group hover:h-3 transition-all">
+                <div className={`w-full relative h-1.5 bg-white/20 cursor-pointer group hover:h-3 transition-all ${isMini ? 'h-1' : ''}`}>
                      <div 
                         className="absolute top-0 left-0 h-full bg-orange-500 shadow-[0_0_10px_rgba(249,115,22,0.5)]" 
                         style={{ width: `${(currentTime / duration) * 100}%` }} 
@@ -671,33 +689,35 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
             )}
 
             {/* Row 2: Control Buttons */}
-            <div className="flex items-center justify-between px-4 py-2">
+            <div className={`flex items-center justify-between px-4 py-2 ${isMini ? 'px-2 py-1 gap-1' : ''}`}>
                 <div className="flex items-center gap-4">
                     <button onClick={togglePlay} className="text-white hover:text-orange-400 transition-colors" title={isPlaying ? "Pause" : "Lecture"}>
-                        {isPlaying ? <Pause size={24} fill="currentColor" /> : <Play size={24} fill="currentColor" />}
+                        {isPlaying ? <Pause size={isMini ? 18 : 24} fill="currentColor" /> : <Play size={isMini ? 18 : 24} fill="currentColor" />}
                     </button>
                     
-                    <button onClick={handleStop} className="text-white/70 hover:text-white transition-colors" title="Arrêter">
-                        <Square size={18} fill="currentColor" />
-                    </button>
+                    {!isMini && (
+                        <button onClick={handleStop} className="text-white/70 hover:text-white transition-colors" title="Arrêter">
+                            <Square size={18} fill="currentColor" />
+                        </button>
+                    )}
 
-                    <div className="flex items-center gap-1 mx-2">
+                    <div className={`flex items-center gap-1 ${isMini ? 'gap-0.5' : 'mx-2'}`}>
                         {type === 'live' ? (
                             <>
                                 <button onClick={() => changeChannel('prev')} className="text-white/70 hover:text-white p-1 hover:bg-white/10 rounded" title="Chaîne précédente">
-                                    <SkipBack size={18} />
+                                    <SkipBack size={isMini ? 14 : 18} />
                                 </button>
                                 <button onClick={() => changeChannel('next')} className="text-white/70 hover:text-white p-1 hover:bg-white/10 rounded" title="Chaîne suivante">
-                                    <SkipForward size={18} />
+                                    <SkipForward size={isMini ? 14 : 18} />
                                 </button>
                             </>
                         ) : (
                             <>
                                 <button onClick={() => skip(-10)} className="text-white/70 hover:text-white p-1 hover:bg-white/10 rounded" title="-10s">
-                                    <SkipBack size={18} />
+                                    <SkipBack size={isMini ? 14 : 18} />
                                 </button>
                                 <button onClick={() => skip(10)} className="text-white/70 hover:text-white p-1 hover:bg-white/10 rounded" title="+10s">
-                                    <SkipForward size={18} />
+                                    <SkipForward size={isMini ? 14 : 18} />
                                 </button>
                             </>
                         )}
@@ -705,22 +725,24 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
                     <div className="flex items-center gap-2 group">
                         <button onClick={toggleMute} className="text-white/80 hover:text-white" title="Volume">
-                             {isMuted ? <VolumeX size={20} /> : <Volume2 size={20} />}
+                             {isMuted ? <VolumeX size={isMini ? 16 : 20} /> : <Volume2 size={isMini ? 16 : 20} />}
                         </button>
-                        <input 
-                            type="range" 
-                            min="0" 
-                            max="1" 
-                            step="0.05" 
-                            value={volume} 
-                            onChange={handleVolumeChange}
-                            className="w-20 h-1 bg-white/30 rounded-lg appearance-none cursor-pointer accent-fluent-accent opacity-0 group-hover:opacity-100 transition-opacity" 
-                        />
+                        {!isMini && (
+                            <input 
+                                type="range" 
+                                min="0" 
+                                max="1" 
+                                step="0.05" 
+                                value={volume} 
+                                onChange={handleVolumeChange}
+                                className="w-20 h-1 bg-white/30 rounded-lg appearance-none cursor-pointer accent-fluent-accent opacity-0 group-hover:opacity-100 transition-opacity" 
+                            />
+                        )}
                     </div>
                 </div>
 
-                <div className="flex items-center gap-4">
-                    {type !== 'live' && (
+                <div className={`flex items-center gap-4 ${isMini ? 'gap-1' : ''}`}>
+                    {!isMini && type !== 'live' && (
                         <div className="text-xs font-mono text-white/80 select-none">
                             <span>{formatTime(currentTime)}</span>
                             <span className="mx-1 text-white/40">/</span>
@@ -728,15 +750,15 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                         </div>
                     )}
                     
-                    {type === 'live' && (
+                    {!isMini && type === 'live' && (
                         <div className="flex items-center gap-2 px-2 py-1 bg-red-500/10 border border-red-500/20 rounded text-red-500 text-[10px] font-bold uppercase tracking-widest animate-pulse select-none">
                             <div className="w-1.5 h-1.5 bg-red-500 rounded-full" /> Live
                         </div>
                     )}
 
-                    <div className="h-4 w-[1px] bg-white/10 mx-1" />
+                    {!isMini && <div className="h-4 w-[1px] bg-white/10 mx-1" />}
 
-                    {type === 'live' && (
+                    {!isMini && type === 'live' && (
                         <button 
                             onClick={() => setIsSidebarOpen(!isSidebarOpen)} 
                             className={`transition-colors ${isSidebarOpen ? 'text-fluent-accent' : 'text-white/70 hover:text-white'}`}
@@ -746,23 +768,41 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                         </button>
                     )}
 
-                    <button onClick={() => setShowInfo(!showInfo)} className={`transition-colors ${showInfo ? 'text-fluent-accent' : 'text-white/70 hover:text-white'}`} title="Informations">
-                        <Info size={20} />
-                    </button>
+                    {!isMini && (
+                        <button onClick={() => setShowInfo(!showInfo)} className={`transition-colors ${showInfo ? 'text-fluent-accent' : 'text-white/70 hover:text-white'}`} title="Informations">
+                            <Info size={20} />
+                        </button>
+                    )}
 
-                    <button className="text-white/70 hover:text-white" title="Paramètres">
-                        <Settings size={20} />
-                    </button>
+                    {!isMini && (
+                        <button className="text-white/70 hover:text-white" title="Paramètres">
+                            <Settings size={20} />
+                        </button>
+                    )}
                     
-                    {onToggleEmbed && (
+                    {isMini && onToggleEmbed && (
+                         <button onClick={onToggleEmbed} className="text-white/70 hover:text-white p-1 hover:bg-white/10 rounded" title="Élargir dans l'EPG">
+                            <Expand size={16} />
+                        </button>
+                    )}
+
+                    {isMini && onMaximize && (
+                         <button onClick={onMaximize} className="text-white/70 hover:text-white p-1 hover:bg-white/10 rounded" title="Élargir dans toute la vue">
+                            <Maximize size={16} />
+                        </button>
+                    )}
+                    
+                    {!isMini && onToggleEmbed && (
                          <button onClick={onToggleEmbed} className="text-white/70 hover:text-white" title={isEmbedded ? "Agrandir" : "Réduire"}>
                             {isEmbedded ? <Expand size={20} /> : <Shrink size={20} />}
                         </button>
                     )}
 
-                    <button onClick={toggleFullscreen} className="text-white/70 hover:text-white" title="Plein écran (Navigateur)">
-                        {isFullscreen ? <Minimize size={20} /> : <Maximize size={20} />}
-                    </button>
+                    {!isMini && (
+                        <button onClick={toggleFullscreen} className="text-white/70 hover:text-white" title="Plein écran (Navigateur)">
+                            {isFullscreen ? <Minimize size={20} /> : <Maximize size={20} />}
+                        </button>
+                    )}
                 </div>
             </div>
         </div>

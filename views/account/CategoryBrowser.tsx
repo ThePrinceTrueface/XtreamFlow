@@ -56,7 +56,9 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
   const [isPlayerExpanded, setIsPlayerExpanded] = useState(false);
   const [showStreamList, setShowStreamList] = useState(true); // Toggle for side-by-side stream list
   const [epgPlayerHeight, setEpgPlayerHeight] = useState(220);
+  const [epgExpandedHeight, setEpgExpandedHeight] = useState(400);
   const [isResizingEpgPlayer, setIsResizingEpgPlayer] = useState(false);
+  const resizeState = useRef({ startY: 0, startHeight: 0 });
 
   // Refs
   const heroTimeoutRef = useRef<number | null>(null);
@@ -270,7 +272,13 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
   useEffect(() => {
     if (!isResizingEpgPlayer) return;
     const handleMouseMove = (e: MouseEvent) => {
-        setEpgPlayerHeight(Math.max(120, Math.min(e.clientY - 120, 600)));
+        const delta = e.clientY - resizeState.current.startY;
+        const newHeight = resizeState.current.startHeight + delta;
+        if (isPlayerExpanded) {
+            setEpgExpandedHeight(Math.max(200, Math.min(newHeight, window.innerHeight - 100)));
+        } else {
+            setEpgPlayerHeight(Math.max(120, Math.min(newHeight, 600)));
+        }
     };
     const handleMouseUp = () => setIsResizingEpgPlayer(false);
     window.addEventListener('mousemove', handleMouseMove);
@@ -279,7 +287,7 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
         window.removeEventListener('mousemove', handleMouseMove);
         window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [isResizingEpgPlayer]);
+  }, [isResizingEpgPlayer, isPlayerExpanded]);
 
   const loadCategories = useCallback(async () => {
     setLoading(true);
@@ -635,9 +643,9 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
                                         {player && (
                                             <div 
                                                 className={`absolute z-40 bg-black shadow-2xl border-b border-white/10 transition-all duration-300
-                                                    ${isPlayerExpanded ? 'inset-x-0 top-0 h-1/2' : 'top-[40px] left-0 w-[220px]'}
+                                                    ${isPlayerExpanded ? 'inset-x-0 top-0' : 'top-[40px] left-0 w-[220px]'}
                                                 `}
-                                                style={{ height: isPlayerExpanded ? undefined : epgPlayerHeight }}
+                                                style={{ height: isPlayerExpanded ? epgExpandedHeight : epgPlayerHeight }}
                                             >
                                                 <VideoPlayer 
                                                     url={player.url} 
@@ -648,18 +656,19 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
                                                     currentItem={player.currentItem}
                                                     onChannelSelect={handlePlay}
                                                     isEmbedded={true}
+                                                    isMini={!isPlayerExpanded}
                                                     onToggleEmbed={() => setIsPlayerExpanded(!isPlayerExpanded)}
+                                                    onMaximize={() => setViewMode('grid')}
                                                     account={account}
                                                 />
-                                                {!isPlayerExpanded && (
-                                                    <div 
-                                                        className="absolute bottom-0 inset-x-0 h-1 cursor-ns-resize bg-white/10 hover:bg-fluent-accent transition-colors z-50"
-                                                        onMouseDown={(e) => {
-                                                            e.preventDefault();
-                                                            setIsResizingEpgPlayer(true);
-                                                        }}
-                                                    />
-                                                )}
+                                                <div 
+                                                    className="absolute bottom-0 inset-x-0 h-1 cursor-ns-resize bg-white/10 hover:bg-fluent-accent transition-colors z-50"
+                                                    onMouseDown={(e) => {
+                                                        e.preventDefault();
+                                                        resizeState.current = { startY: e.clientY, startHeight: isPlayerExpanded ? epgExpandedHeight : epgPlayerHeight };
+                                                        setIsResizingEpgPlayer(true);
+                                                    }}
+                                                />
                                             </div>
                                         )}
                                         <div className="flex-1 overflow-hidden">
@@ -735,9 +744,9 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
                             {player && (
                                 <div 
                                     className={`absolute z-40 bg-black shadow-2xl border-b border-white/10 transition-all duration-300
-                                        ${isPlayerExpanded ? 'inset-x-0 top-0 h-1/2' : 'top-[40px] left-0 w-[220px]'}
+                                        ${isPlayerExpanded ? 'inset-x-0 top-0' : 'top-[40px] left-0 w-[220px]'}
                                     `}
-                                    style={{ height: isPlayerExpanded ? undefined : epgPlayerHeight }}
+                                    style={{ height: isPlayerExpanded ? epgExpandedHeight : epgPlayerHeight }}
                                 >
                                     <VideoPlayer 
                                         url={player.url} 
@@ -748,18 +757,19 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
                                         currentItem={player.currentItem}
                                         onChannelSelect={handlePlay}
                                         isEmbedded={true}
+                                        isMini={!isPlayerExpanded}
                                         onToggleEmbed={() => setIsPlayerExpanded(!isPlayerExpanded)}
+                                        onMaximize={() => setViewMode('grid')}
                                         account={account}
                                     />
-                                    {!isPlayerExpanded && (
-                                        <div 
-                                            className="absolute bottom-0 inset-x-0 h-1 cursor-ns-resize bg-white/10 hover:bg-fluent-accent transition-colors z-50"
-                                            onMouseDown={(e) => {
-                                                e.preventDefault();
-                                                setIsResizingEpgPlayer(true);
-                                            }}
-                                        />
-                                    )}
+                                    <div 
+                                        className="absolute bottom-0 inset-x-0 h-1 cursor-ns-resize bg-white/10 hover:bg-fluent-accent transition-colors z-50"
+                                        onMouseDown={(e) => {
+                                            e.preventDefault();
+                                            resizeState.current = { startY: e.clientY, startHeight: isPlayerExpanded ? epgExpandedHeight : epgPlayerHeight };
+                                            setIsResizingEpgPlayer(true);
+                                        }}
+                                    />
                                 </div>
                             )}
                             <div className="flex-1 overflow-hidden">
