@@ -12,6 +12,7 @@ interface GlobalSearchProps {
 
 export const GlobalSearch: React.FC<GlobalSearchProps> = ({ isOpen, onClose, onSelectResult }) => {
   const [query, setQuery] = useState('');
+  const [filter, setFilter] = useState<'all' | 'live' | 'epg' | 'movie' | 'series'>('all');
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -19,6 +20,7 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ isOpen, onClose, onS
       setTimeout(() => inputRef.current?.focus(), 100);
     } else {
       setQuery('');
+      setFilter('all');
     }
   }, [isOpen]);
 
@@ -28,7 +30,7 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ isOpen, onClose, onS
     const q = query.toLowerCase();
     
     // Search streams (Live, VOD, Series)
-    const streams = await db.streams
+    let streams = await db.streams
       .filter(stream => 
         (stream.name || '').toLowerCase().includes(q) ||
         (stream.plot || '').toLowerCase().includes(q) ||
@@ -36,17 +38,30 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ isOpen, onClose, onS
         (stream.director || '').toLowerCase().includes(q) ||
         (stream.genre || '').toLowerCase().includes(q)
       )
-      .limit(20)
+      .limit(50)
       .toArray();
+
+    if (filter !== 'all') {
+      if (filter === 'live') streams = streams.filter(s => s.type === 'live');
+      else if (filter === 'movie') streams = streams.filter(s => s.type === 'movie');
+      else if (filter === 'series') streams = streams.filter(s => s.type === 'series');
+    }
       
     // Search EPG
-    const epg = await db.epg
+    let epg = await db.epg
       .filter(prog => 
         (prog.title || '').toLowerCase().includes(q) || 
         (prog.description || '').toLowerCase().includes(q)
       )
-      .limit(10)
+      .limit(50)
       .toArray();
+
+    if (filter !== 'all' && filter !== 'epg') {
+        epg = [];
+    }
+    if (filter === 'live' || filter === 'movie' || filter === 'series') {
+        epg = [];
+    }
 
     // Fetch account names
     const accountIds = new Set([...streams.map(s => s.accountId), ...epg.map(e => e.accountId)]);
@@ -57,9 +72,17 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ isOpen, onClose, onS
     }, {} as Record<string, string>);
       
     return { streams, epg, accountsMap };
-  }, [query], { streams: [], epg: [], accountsMap: {} });
+  }, [query, filter], { streams: [], epg: [], accountsMap: {} });
 
   if (!isOpen) return null;
+
+  const filters: { label: string, value: typeof filter }[] = [
+    { label: 'Tous', value: 'all' },
+    { label: 'Chaînes', value: 'live' },
+    { label: 'EPG', value: 'epg' },
+    { label: 'Films', value: 'movie' },
+    { label: 'Séries', value: 'series' },
+  ];
 
   return (
     <div className="fixed inset-0 z-[100] flex items-start justify-center pt-[10vh] bg-black/60 backdrop-blur-sm p-4">
@@ -88,6 +111,21 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ isOpen, onClose, onS
               <X size={18} />
             </button>
           )}
+        </div>
+        
+        {/* Filtres */}
+        <div className="flex items-center gap-2 px-4 py-2 bg-white/5 border-b border-white/10 overflow-x-auto">
+          {filters.map(f => (
+            <button
+              key={f.value}
+              onClick={() => setFilter(f.value)}
+              className={`px-3 py-1 rounded-full text-xs font-medium transition-colors whitespace-nowrap ${
+                filter === f.value ? 'bg-fluent-accent text-white' : 'bg-white/5 text-fluent-subtext hover:bg-white/10'
+              }`}
+            >
+              {f.label}
+            </button>
+          ))}
         </div>
 
         <div className="flex-1 overflow-y-auto p-2 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
