@@ -13,7 +13,8 @@ import {
   Server,
   Wrench,
   PanelLeftClose,
-  PanelLeftOpen
+  PanelLeftOpen,
+  Download
 } from 'lucide-react';
 import { ViewState } from '../types';
 
@@ -56,6 +57,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeView, setView, isCollaps
     { id: 'add-account', label: 'Add Account', icon: Plus },
     { id: 'manage-accounts', label: 'Manage Accounts', icon: Database },
     { id: 'server-library', label: 'Server Library', icon: Server },
+    { id: 'downloads', label: 'Downloads', icon: Download },
     { id: 'settings', label: 'Settings', icon: SettingsIcon },
   ];
 
@@ -122,6 +124,7 @@ export const AccountSidebar: React.FC<AccountSidebarProps> = ({ activeTab, setTa
     { id: 'live', label: 'Live TV', icon: Tv },
     { id: 'vod', label: 'Movies', icon: Film },
     { id: 'series', label: 'Series', icon: Clapperboard },
+    { id: 'downloads', label: 'Downloads', icon: Download },
     { id: 'tools', label: 'Tools', icon: Wrench },
   ];
 

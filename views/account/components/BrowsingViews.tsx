@@ -1,9 +1,11 @@
 
 import React, { useState, useEffect, useRef } from 'react';
+import { motion } from 'motion/react';
 import { Play, Film, Star, Sparkles, ChevronRight, ChevronLeft, Image as ImageIcon, PlusCircle, CheckCircle2 } from 'lucide-react';
 import { XtreamStream } from '../../../types';
 import { Button } from '../../../components/Win11UI';
 import { useUserPreferences } from '../../../hooks/useUserPreferences';
+import { decodeBase64 } from '../../../utils';
 
 interface ItemGridProps {
   items: XtreamStream[];
@@ -11,31 +13,6 @@ interface ItemGridProps {
   onItemClick: (item: XtreamStream) => void;
   accountId?: string;
 }
-
-// Helper to decode Base64 strings safely and fix encoding issues
-const decodeBase64 = (str: string) => {
-    if (!str) return "";
-    let decoded = str;
-
-    // 1. Try Base64 decoding if it looks like Base64 (no spaces, valid chars)
-    if (!str.includes(' ') && /^([A-Za-z0-9+/]{4})*([A-Za-z0-9+/]{3}=|[A-Za-z0-9+/]{2}==)?$/.test(str)) {
-         try {
-             const raw = window.atob(str);
-             if (!/[\x00-\x08\x0B\x0C\x0E-\x1F]/.test(raw)) {
-                 decoded = raw;
-             }
-         } catch (e) {
-             // Not base64
-         }
-    }
-
-    // 2. Fix UTF-8 interpreted as Latin-1 (Mojibake)
-    try {
-        return decodeURIComponent(escape(decoded));
-    } catch (e) {
-        return decoded;
-    }
-};
 
 export const ItemGrid: React.FC<ItemGridProps> = ({ items, type, onItemClick, accountId = 'guest' }) => {
   const [displayLimit, setDisplayLimit] = useState(60);
@@ -48,22 +25,44 @@ export const ItemGrid: React.FC<ItemGridProps> = ({ items, type, onItemClick, ac
   const visibleItems = items.slice(0, displayLimit);
   const hasMore = items.length > displayLimit;
 
+  if (items.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 text-center animate-in fade-in slide-in-from-bottom-4 duration-500">
+        <div className="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center mb-6 border border-white/10">
+          <Star size={32} className="text-white/20" />
+        </div>
+        <h3 className="text-xl font-semibold text-white mb-2">Aucun élément trouvé</h3>
+        <p className="text-fluent-subtext max-w-xs mx-auto">
+          {type === 'live' ? 'Aucune chaîne' : type === 'vod' ? 'Aucun film' : 'Aucune série'} ne correspond à votre sélection ou n'a été ajouté à vos favoris.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-8 pb-20">
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
         {visibleItems.map((item) => {
           const id = item.stream_id || item.series_id || item.num;
           const progress = getProgress(id);
-          const fav = isFavorite(id);
+          const fav = isFavorite(id, type);
           
           return (
-            <div key={id} onClick={() => onItemClick(item)}
-              className="group bg-fluent-layer hover:bg-fluent-layerHover border border-fluent-border rounded-window overflow-hidden cursor-pointer transition-all duration-200 relative shadow-sm hover:shadow-md active:scale-[0.99]">
+            <motion.div 
+              key={id} 
+              onClick={() => onItemClick(item)}
+              layoutId={`item-container-${id}`}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              whileHover={{ y: -5 }}
+              whileTap={{ scale: 0.98 }}
+              className="group bg-fluent-layer hover:bg-fluent-layerHover border border-fluent-border rounded-window overflow-hidden cursor-pointer transition-all duration-200 relative shadow-sm hover:shadow-md">
               
               {/* Image Container */}
               <div className={`${type === 'live' ? 'aspect-square' : 'aspect-[2/3]'} w-full bg-black/40 relative flex items-center justify-center overflow-hidden`}>
                 {item.stream_icon || item.cover ? (
-                  <img 
+                  <motion.img 
+                    layoutId={`poster-${id}`}
                     src={item.stream_icon || item.cover} 
                     className="w-full h-full object-contain p-2 transition-transform duration-500 group-hover:scale-105" 
                     loading="lazy" 
@@ -94,11 +93,14 @@ export const ItemGrid: React.FC<ItemGridProps> = ({ items, type, onItemClick, ac
                 )}
               </div>
 
-              {/* Normalized Info Section */}
               <div className="p-3 border-t border-white/5">
-                <h4 className="text-[13px] font-medium truncate mb-1 text-white group-hover:text-fluent-accent transition-colors" title={decodeBase64(item.name)}>
+                <motion.h4 
+                  layoutId={`title-${id}`}
+                  className="text-[13px] font-medium truncate mb-1 text-white group-hover:text-fluent-accent transition-colors" 
+                  title={decodeBase64(item.name)}
+                >
                     {decodeBase64(item.name)}
-                </h4>
+                </motion.h4>
                 {item.rating && (
                     <div className="flex items-center gap-1 text-[11px] text-white/50">
                         <Star size={10} className="text-yellow-500/70 fill-current"/> 
@@ -106,7 +108,7 @@ export const ItemGrid: React.FC<ItemGridProps> = ({ items, type, onItemClick, ac
                     </div>
                 )}
               </div>
-            </div>
+            </motion.div>
           );
         })}
       </div>
@@ -170,26 +172,45 @@ export const HorizontalRow: React.FC<HorizontalRowProps> = ({ categoryId, name, 
             ref={rowRef}
             className="flex overflow-x-auto gap-4 px-2 pb-4 no-scrollbar custom-scrollbar scroll-smooth"
           >
-            {items.map(item => (
-              <div key={item.stream_id || item.series_id} onClick={() => onItemClick(item)}
-                className="shrink-0 w-[150px] group bg-fluent-layer hover:bg-fluent-layerHover border border-fluent-border rounded-window overflow-hidden cursor-pointer transition-all duration-200 relative shadow-sm hover:shadow-md active:scale-95">
-                
-                <div className={`${type === 'live' ? 'aspect-square' : 'aspect-[2/3]'} w-full bg-black/40 relative flex items-center justify-center overflow-hidden`}>
-                  {item.stream_icon || item.cover ? (
-                    <img src={item.stream_icon || item.cover} className={`w-full h-full ${type === 'live' ? 'object-contain p-2' : 'object-cover'} transition-transform duration-500 group-hover:scale-105`} loading="lazy" alt={item.name} />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-white/5"><Film size={32}/></div>
-                  )}
-                  <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                    <Play fill="currentColor" size={24} className="text-white"/>
+            {items.map(item => {
+              const id = item.stream_id || item.series_id;
+              return (
+                <motion.div 
+                  key={id} 
+                  onClick={() => onItemClick(item)}
+                  layoutId={`item-container-${id}`}
+                  whileHover={{ y: -5 }}
+                  whileTap={{ scale: 0.95 }}
+                  className="shrink-0 w-[150px] group bg-fluent-layer hover:bg-fluent-layerHover border border-fluent-border rounded-window overflow-hidden cursor-pointer transition-all duration-200 relative shadow-sm hover:shadow-md">
+                  
+                  <div className={`${type === 'live' ? 'aspect-square' : 'aspect-[2/3]'} w-full bg-black/40 relative flex items-center justify-center overflow-hidden`}>
+                    {item.stream_icon || item.cover ? (
+                      <motion.img 
+                        layoutId={`poster-${id}`}
+                        src={item.stream_icon || item.cover} 
+                        className={`w-full h-full ${type === 'live' ? 'object-contain p-2' : 'object-cover'} transition-transform duration-500 group-hover:scale-105`} 
+                        loading="lazy" 
+                        alt={item.name} 
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-white/5"><Film size={32}/></div>
+                    )}
+                    <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                      <Play fill="currentColor" size={24} className="text-white"/>
+                    </div>
                   </div>
-                </div>
 
-                <div className="p-2.5 border-t border-white/5">
-                    <h4 className="text-[12px] font-medium truncate text-white group-hover:text-fluent-accent transition-colors leading-tight">{decodeBase64(item.name)}</h4>
-                </div>
-              </div>
-            ))}
+                  <div className="p-2.5 border-t border-white/5">
+                      <motion.h4 
+                        layoutId={`title-${id}`}
+                        className="text-[12px] font-medium truncate text-white group-hover:text-fluent-accent transition-colors leading-tight"
+                      >
+                        {decodeBase64(item.name)}
+                      </motion.h4>
+                  </div>
+                </motion.div>
+              );
+            })}
           </div>
 
           <button 

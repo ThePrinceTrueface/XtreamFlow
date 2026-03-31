@@ -1,11 +1,14 @@
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { Tv, RefreshCw, ArrowLeft, Search, Folder, Layout, List, Film, Clapperboard, Columns, PanelLeftOpen, PanelLeftClose } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import { Tv, RefreshCw, ArrowLeft, Search, Folder, Layout, List, Film, Clapperboard, Columns, PanelLeftOpen, PanelLeftClose, Star } from 'lucide-react';
 import { XtreamAccount, XtreamCategory, XtreamStream } from '../../types';
 import { Button } from '../../components/Win11UI';
 import { VideoPlayer } from '../../components/VideoPlayer';
 import { createProxyUrl, createInlineWorker } from '../../utils';
 import { XTREAM_WORKER_CODE } from '../../workers/xtream.worker';
+import { useUserPreferences } from '../../hooks/useUserPreferences';
+import { cacheService } from '../../src/services/cacheService';
 
 // Sous-modules modularisés
 import { HeroSection } from './components/HeroSection';
@@ -16,13 +19,14 @@ import { SkeletonLoader } from './components/SkeletonLoader';
 import { StreamListSidebar } from './components/StreamListSidebar';
 import { EPGView } from './components/EPGView';
 
+const FAVORITES_CATEGORY: XtreamCategory = { category_id: 'favorites', category_name: 'Favoris', parent_id: 0 };
+
 interface CategoryBrowserProps {
     account: XtreamAccount;
     type: 'live' | 'vod' | 'series';
-    fetchCached: (url: string) => Promise<any>;
 }
 
-export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type, fetchCached }) => {
+export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type }) => {
   // Navigation & UI State
   const [uiMode, setUiMode] = useState<'normal' | 'flow'>(() => (localStorage.getItem('category_ui_mode') as 'normal' | 'flow') || 'normal');
   const [viewMode, setViewMode] = useState<'grid' | 'epg'>('grid'); // New state for EPG toggle
@@ -54,6 +58,7 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
       currentItem?: XtreamStream;
   } | null>(null);
   const [isPlayerExpanded, setIsPlayerExpanded] = useState(false);
+  const [isPlayerFullWindow, setIsPlayerFullWindow] = useState(false);
   const [showStreamList, setShowStreamList] = useState(true); // Toggle for side-by-side stream list
   const [epgPlayerHeight, setEpgPlayerHeight] = useState(220);
   const [epgExpandedHeight, setEpgExpandedHeight] = useState(400);
@@ -72,11 +77,30 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
   const heroDetailRef = useRef<any>(null);
   const isTrailerMutedRef = useRef(true);
 
+  const { isFavorite, getFavorites } = useUserPreferences(account.id);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   
   const [detailData, setDetailData] = useState<any | null>(null); 
+
+  // Computed display data to handle favorites reactivity and search
+  const itemsToDisplay = useMemo(() => {
+    if (selectedCategory?.category_id === 'favorites') {
+        const favs = getFavorites(type);
+        if (!searchQuery) return favs;
+        const q = searchQuery.toLowerCase();
+        return favs.filter(item => (item.name || "").toLowerCase().includes(q));
+    }
+
+    const base = displayData;
+    if (!searchQuery) return base;
+
+    const q = searchQuery.toLowerCase();
+    return base.filter(item => 
+        (item.name || "").toLowerCase().includes(q)
+    );
+  }, [displayData, selectedCategory, searchQuery, getFavorites, type]);
 
   // MEMOIZED CONFIGURATION TO PREVENT INFINITE LOOPS
   const currentConfig = useMemo(() => {
@@ -96,9 +120,14 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
               const { type, data, error } = e.data;
               if (type === 'SUCCESS') {
                   setFullData(data.full);
-                  setDisplayData(data.full);
                   setCategoryPreviews(data.grouped);
                   setHeroIndex(data.full.length > 0 ? Math.floor(Math.random() * Math.min(data.full.length, 100)) : -1);
+                  
+                  // In Flow mode, displayData is the full set
+                  if (uiMode === 'flow') {
+                      setDisplayData(data.full);
+                  }
+                  
                   setLoading(false);
               } else if (type === 'ERROR') {
                   console.error("Worker Error:", error);
@@ -121,6 +150,7 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
   const handleClosePlayer = useCallback(() => {
       setPlayer(null);
       setIsPlayerExpanded(false); // Reset to embedded for next time in flow mode
+      setIsPlayerFullWindow(false);
       setShowStreamList(true); // Reset list visibility
   }, []);
 
@@ -203,6 +233,10 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
 
   // Projector Cycle
   useEffect(() => {
+    if (player) {
+        if (heroTimeoutRef.current) window.clearTimeout(heroTimeoutRef.current);
+        return;
+    }
     if (heroPhase === 'backdrop' && heroIndex !== -1) {
         if (heroTimeoutRef.current) window.clearTimeout(heroTimeoutRef.current);
         heroTimeoutRef.current = window.setTimeout(() => {
@@ -214,11 +248,15 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
         }, 8000);
     }
     return () => { if (heroTimeoutRef.current) window.clearTimeout(heroTimeoutRef.current); };
-  }, [heroPhase, heroIndex, handleNextHero]);
+  }, [heroPhase, heroIndex, handleNextHero, player]);
 
   // Trailer Player Management
   useEffect(() => {
     let checkInterval: number | null = null;
+    if (player) {
+        if (ytPlayerRef.current) { try { ytPlayerRef.current.destroy(); } catch(e) {} ytPlayerRef.current = null; }
+        return;
+    }
     if (heroPhase === 'trailer') {
         const trailerUrl = heroDetail?.info?.youtube_trailer;
         if (!trailerUrl) { handleNextHero(); return; }
@@ -267,7 +305,7 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
         }
     }
     return () => { if (checkInterval) clearInterval(checkInterval); };
-  }, [heroPhase, heroDetail, ytContainerId, handleNextHero]);
+  }, [heroPhase, heroDetail, ytContainerId, handleNextHero, player]);
 
   useEffect(() => {
     if (!isResizingEpgPlayer) return;
@@ -292,22 +330,21 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
   const loadCategories = useCallback(async () => {
     setLoading(true);
     try {
-        const catData = await fetchCached(buildApiUrl(currentConfig.catAction));
+        const catData = await cacheService.getCategories(account, type);
         if (Array.isArray(catData)) setCategories(catData);
 
         if (uiMode === 'flow') {
-            const listUrl = buildApiUrl(currentConfig.listAction);
+            const listData = await cacheService.getStreams(account, type);
             if (workerRef.current) {
-                // Use worker to fetch and group
+                // Use worker to group data
                 workerRef.current.postMessage({ 
-                    type: 'FETCH_AND_GROUP', 
-                    payload: { url: listUrl, limit: 20 },
+                    type: 'GROUP_DATA', 
+                    payload: { data: listData, limit: 20 },
                     id: Date.now()
                 });
             } else {
-                // Fallback (Should not happen if worker init is correct)
-                const listData = await fetchCached(listUrl);
-                 if (Array.isArray(listData)) {
+                // Fallback
+                if (Array.isArray(listData)) {
                     setFullData(listData);
                     setDisplayData(listData);
                     setHeroIndex(listData.length > 0 ? Math.floor(Math.random() * Math.min(listData.length, 100)) : -1);
@@ -321,11 +358,22 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
         setError("Erreur de chargement."); 
         setLoading(false);
     }
-  }, [buildApiUrl, currentConfig, fetchCached, uiMode]);
+  }, [account, type, uiMode]);
 
   useEffect(() => { 
     loadCategories(); 
   }, [loadCategories]);
+
+  // Reset navigation when type changes
+  useEffect(() => {
+    setCurrentLevel('categories');
+    setSelectedCategory(null);
+    setSelectedItem(null);
+    setHistoryStack([]);
+    setSearchQuery('');
+    setFullData([]);
+    setDisplayData([]);
+  }, [type]);
 
   // FILTERED CATEGORIES (For Classic Mode Search)
   const filteredCategories = useMemo(() => {
@@ -333,8 +381,21 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
     return categories.filter(c => c.category_name.toLowerCase().includes(searchQuery.toLowerCase()));
   }, [categories, searchQuery, currentLevel]);
 
-  const handleCategorySelect = async (cat: XtreamCategory | null) => {
+  const handleCategorySelect = async (cat: XtreamCategory | null | 'favorites') => {
     setSearchQuery('');
+    
+    if (cat === 'favorites') {
+        setSelectedCategory(FAVORITES_CATEGORY);
+        setCurrentLevel('items');
+        setHistoryStack([]);
+        setSelectedItem(null);
+        setHeroIndex(-1);
+        
+        // We use getFavorites(type) in the memo, so we just need to ensure displayData is not fighting it
+        // and maybe trigger a background fetch to refresh metadata if needed, but the view is already reactive.
+        return;
+    }
+
     setSelectedCategory(cat);
     setCurrentLevel('items');
     setHistoryStack([]);
@@ -348,11 +409,11 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
         // Mode Flow: Returning to 'All' implies loading all items back into fullData for global search
         if (uiMode === 'flow') {
              setLoading(true);
-             const listUrl = buildApiUrl(currentConfig.listAction);
+             const listData = await cacheService.getStreams(account, type);
              if (workerRef.current) {
                  workerRef.current.postMessage({ 
-                     type: 'FETCH_AND_GROUP', 
-                     payload: { url: listUrl, limit: 20 },
+                     type: 'GROUP_DATA', 
+                     payload: { data: listData, limit: 20 },
                      id: Date.now() 
                  });
              }
@@ -363,7 +424,7 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
     } else {
         setLoading(true); 
         try {
-            const d = await fetchCached(buildApiUrl(currentConfig.listAction, { category_id: cat.category_id }));
+            const d = await cacheService.getStreams(account, type, cat.category_id);
             if (Array.isArray(d)) {
                 setFullData(d); // Update fullData context for search
                 setDisplayData(d);
@@ -381,17 +442,14 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
 
   const fetchAndSetDetail = useCallback((item: XtreamStream) => {
       const id = item.stream_id || item.series_id;
-      if (!id) return;
+      if (!id || type === 'live') return;
 
       setLoading(true);
-      const action = type === 'vod' ? 'get_vod_info' : 'get_series_info';
-      const paramKey = type === 'vod' ? 'vod_id' : 'series_id';
-      
-      fetchCached(buildApiUrl(action, { [paramKey]: id.toString() })).then(res => {
+      cacheService.getStreamInfo(account, type as 'vod' | 'series', id).then(res => {
           setDetailData(Array.isArray(res) ? res[0] : res);
           setLoading(false);
       }).catch(() => setLoading(false));
-  }, [type, buildApiUrl, fetchCached]);
+  }, [account, type]);
 
   const handlePlay = useCallback((item: XtreamStream) => {
     const baseUrl = `${account.protocol}://${account.host}:${account.port}`;
@@ -509,14 +567,12 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
     let isMounted = true;
     if (heroItem && currentLevel === 'items' && type !== 'live') {
       const id = heroItem.stream_id || heroItem.series_id;
-      const action = type === 'vod' ? 'get_vod_info' : 'get_series_info';
-      const paramKey = type === 'vod' ? 'vod_id' : 'series_id';
-      fetchCached(buildApiUrl(action, { [paramKey]: id.toString() })).then(data => {
+      cacheService.getStreamInfo(account, type as 'vod' | 'series', id).then(data => {
         if (isMounted) setHeroDetail(Array.isArray(data) ? data[0] : data);
       });
     }
     return () => { isMounted = false; };
-  }, [heroItem, currentLevel, type, buildApiUrl, fetchCached]);
+  }, [account, heroItem, currentLevel, type]);
 
   return (
     <div className="h-full flex flex-col bg-transparent relative">
@@ -525,16 +581,19 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
           .no-scrollbar::-webkit-scrollbar { display: none; }
         `}</style>
 
-        {/* Global Player for Normal Mode */}
-        {player && uiMode === 'normal' && viewMode !== 'epg' && (
+        {/* Global Player for Full Window Mode or Normal Mode */}
+        {player && (isPlayerFullWindow || (uiMode === 'normal' && viewMode !== 'epg')) && (
             <VideoPlayer 
                 url={player.url} 
                 title={player.title} 
                 type={player.type} 
                 onClose={handleClosePlayer}
-                playlist={type === 'live' ? displayData : undefined}
+                playlist={type === 'live' ? itemsToDisplay : undefined}
                 currentItem={player.currentItem}
                 onChannelSelect={handlePlay}
+                isEmbedded={false}
+                onToggleEmbed={() => setIsPlayerFullWindow(false)}
+                onRestore={uiMode === 'flow' ? () => { setIsPlayerFullWindow(false); setViewMode('grid'); } : undefined}
                 account={account}
             />
         )}
@@ -584,7 +643,7 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
                                 {/* Pane 2: Stream List Sidebar (Collapsible) */}
                                 {showStreamList && (
                                     <StreamListSidebar 
-                                        items={displayData} 
+                                        items={itemsToDisplay} 
                                         selectedItem={player.currentItem || null} 
                                         onSelect={handlePlay} 
                                         onClose={() => setShowStreamList(false)}
@@ -603,197 +662,259 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
                                             <PanelLeftOpen size={20} />
                                         </button>
                                     )}
-                                    <VideoPlayer 
-                                        url={player.url} 
-                                        title={player.title} 
-                                        type={player.type} 
-                                        onClose={handleClosePlayer}
-                                        playlist={type === 'live' ? displayData : undefined}
-                                        currentItem={player.currentItem}
-                                        onChannelSelect={handlePlay}
-                                        isEmbedded={!isPlayerExpanded}
-                                        onToggleEmbed={() => setIsPlayerExpanded(!isPlayerExpanded)}
-                                        account={account}
-                                    />
+                                    {!isPlayerFullWindow && (
+                                        <VideoPlayer 
+                                            url={player.url} 
+                                            title={player.title} 
+                                            type={player.type} 
+                                            onClose={handleClosePlayer}
+                                            playlist={type === 'live' ? itemsToDisplay : undefined}
+                                            currentItem={player.currentItem}
+                                            onChannelSelect={handlePlay}
+                                            isEmbedded={true}
+                                            onToggleEmbed={() => setIsPlayerFullWindow(true)}
+                                            account={account}
+                                        />
+                                    )}
                                 </div>
                             </>
                         ) : (
                             // Browse Layout (Hero + Grids)
                             <div className="flex-1 overflow-y-auto custom-scrollbar relative h-full">
-                                {loading ? (
-                                    <div className={currentLevel === 'detail' ? "" : "px-10 pt-8"}>
-                                        <SkeletonLoader type={type} mode={currentLevel === 'detail' ? 'detail' : 'grid'} />
-                                    </div>
-                                ) : currentLevel === 'detail' && selectedItem ? (
-                                    <ItemDetailView 
-                                        item={selectedItem} 
-                                        detail={detailData} 
-                                        loading={loading} 
-                                        type={type} 
-                                        onBack={handleNavigateBack}
-                                        onClose={handleGoBack} 
-                                        onPlay={handlePlay} 
-                                        onPlayEpisode={handlePlayEpisode}
-                                        account={account}
-                                        siblingItems={displayData}
-                                        onSwitchItem={handleDetail}
-                                    />
-                                ) : viewMode === 'epg' && type === 'live' ? (
-                                    <div className="relative h-full flex flex-col overflow-hidden w-full">
-                                        {player && (
-                                            <div 
-                                                className={`absolute z-40 bg-black shadow-2xl border-b border-white/10 transition-all duration-300
-                                                    ${isPlayerExpanded ? 'inset-x-0 top-0' : 'top-[40px] left-0 w-[220px]'}
-                                                `}
-                                                style={{ height: isPlayerExpanded ? epgExpandedHeight : epgPlayerHeight }}
-                                            >
-                                                <VideoPlayer 
-                                                    url={player.url} 
-                                                    title={player.title} 
-                                                    type={player.type} 
-                                                    onClose={handleClosePlayer}
-                                                    playlist={type === 'live' ? displayData : undefined}
-                                                    currentItem={player.currentItem}
-                                                    onChannelSelect={handlePlay}
-                                                    isEmbedded={true}
-                                                    isMini={!isPlayerExpanded}
-                                                    onToggleEmbed={() => setIsPlayerExpanded(!isPlayerExpanded)}
-                                                    onMaximize={() => setViewMode('grid')}
-                                                    account={account}
-                                                />
-                                                <div 
-                                                    className="absolute bottom-0 inset-x-0 h-1 cursor-ns-resize bg-white/10 hover:bg-fluent-accent transition-colors z-50"
-                                                    onMouseDown={(e) => {
-                                                        e.preventDefault();
-                                                        resizeState.current = { startY: e.clientY, startHeight: isPlayerExpanded ? epgExpandedHeight : epgPlayerHeight };
-                                                        setIsResizingEpgPlayer(true);
-                                                    }}
-                                                />
-                                            </div>
-                                        )}
-                                        <div className="flex-1 overflow-hidden">
-                                            <EPGView 
-                                                channels={displayData} 
-                                                account={account} 
-                                                onChannelClick={handlePlay} 
-                                                fetchCached={fetchCached} 
+                                <AnimatePresence mode="wait">
+                                    {loading ? (
+                                        <motion.div 
+                                            key="loading"
+                                            initial={{ opacity: 0 }}
+                                            animate={{ opacity: 1 }}
+                                            exit={{ opacity: 0 }}
+                                            className={currentLevel === 'detail' ? "" : "px-10 pt-8"}
+                                        >
+                                            <SkeletonLoader type={type} mode={currentLevel === 'detail' ? 'detail' : 'grid'} />
+                                        </motion.div>
+                                    ) : currentLevel === 'detail' && selectedItem ? (
+                                        <motion.div
+                                            key={`detail-${selectedItem.stream_id || selectedItem.series_id}`}
+                                            initial={{ opacity: 0 }}
+                                            animate={{ opacity: 1 }}
+                                            exit={{ opacity: 0 }}
+                                            className="h-full"
+                                        >
+                                            <ItemDetailView 
+                                                item={selectedItem} 
+                                                detail={detailData} 
+                                                loading={loading} 
+                                                type={type} 
+                                                onBack={handleNavigateBack}
+                                                onClose={handleGoBack} 
+                                                onPlay={handlePlay} 
+                                                onPlayEpisode={handlePlayEpisode}
+                                                account={account}
+                                                siblingItems={displayData}
+                                                onSwitchItem={handleDetail}
                                             />
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <div key={selectedCategory?.category_id || 'all'} className="px-10">
-                                        {heroItem && (
-                                            <div ref={heroContainerRef}>
-                                                <HeroSection item={heroItem} detail={heroDetail} phase={heroPhase} isFading={isHeroFading} ytContainerId={ytContainerId} onNext={handleNextHero} onPlay={handlePlay} onInfo={handleDetail} isMuted={isTrailerMuted} onToggleMute={toggleTrailerMute} />
-                                            </div>
-                                        )}
-                                        {selectedCategory === null && !searchQuery ? (
-                                            Object.entries(categoryPreviews).map(([id, items]) => (
-                                                <HorizontalRow 
-                                                    key={id} 
-                                                    categoryId={id} 
-                                                    name={categories.find(c => c.category_id === id)?.category_name || "Catégorie"} 
-                                                    items={items} 
-                                                    type={type}
-                                                    onItemClick={handleGridClick} 
-                                                    onExplore={(cid) => handleCategorySelect(categories.find(c => c.category_id === cid) || null)} 
+                                        </motion.div>
+                                    ) : viewMode === 'epg' && type === 'live' ? (
+                                        <motion.div 
+                                            key="epg"
+                                            initial={{ opacity: 0 }}
+                                            animate={{ opacity: 1 }}
+                                            exit={{ opacity: 0 }}
+                                            className="relative h-full flex flex-col overflow-hidden w-full"
+                                        >
+                                            {player && !isPlayerFullWindow && (
+                                                <div 
+                                                    className={`absolute z-40 bg-black shadow-2xl border-b border-white/10 transition-all duration-300
+                                                        ${isPlayerExpanded ? 'inset-x-0 top-0' : 'top-[40px] left-0 w-[220px]'}
+                                                    `}
+                                                    style={{ height: isPlayerExpanded ? epgExpandedHeight : epgPlayerHeight }}
+                                                >
+                                                    <VideoPlayer 
+                                                        url={player.url} 
+                                                        title={player.title} 
+                                                        type={player.type} 
+                                                        onClose={handleClosePlayer}
+                                                        playlist={type === 'live' ? displayData : undefined}
+                                                        currentItem={player.currentItem}
+                                                        onChannelSelect={handlePlay}
+                                                        isEmbedded={true}
+                                                        isMini={!isPlayerExpanded}
+                                                        onToggleEmbed={() => setIsPlayerExpanded(!isPlayerExpanded)}
+                                                        onFullWindow={() => setIsPlayerFullWindow(true)}
+                                                        onRestore={() => setViewMode('grid')}
+                                                        account={account}
+                                                    />
+                                                    <div 
+                                                        className="absolute bottom-0 inset-x-0 h-1 cursor-ns-resize bg-white/10 hover:bg-fluent-accent transition-colors z-50"
+                                                        onMouseDown={(e) => {
+                                                            e.preventDefault();
+                                                            resizeState.current = { startY: e.clientY, startHeight: isPlayerExpanded ? epgExpandedHeight : epgPlayerHeight };
+                                                            setIsResizingEpgPlayer(true);
+                                                        }}
+                                                    />
+                                                </div>
+                                            )}
+                                            <div className="flex-1 overflow-hidden">
+                                                <EPGView 
+                                                    channels={itemsToDisplay} 
+                                                    account={account} 
+                                                    onChannelClick={handlePlay} 
                                                 />
-                                            ))
-                                        ) : (
-                                            <ItemGrid items={displayData} type={type} onItemClick={handleGridClick} accountId={account.id} />
-                                        )}
-                                        <div className="h-24" />
-                                    </div>
-                                )}
+                                            </div>
+                                        </motion.div>
+                                    ) : (
+                                        <motion.div 
+                                            key={`grid-${selectedCategory?.category_id || 'all'}`}
+                                            initial={{ opacity: 0 }}
+                                            animate={{ opacity: 1 }}
+                                            exit={{ opacity: 0 }}
+                                            className="px-10"
+                                        >
+                                            {heroItem && (
+                                                <div ref={heroContainerRef}>
+                                                    <HeroSection item={heroItem} detail={heroDetail} phase={heroPhase} isFading={isHeroFading} ytContainerId={ytContainerId} onNext={handleNextHero} onPlay={handlePlay} onInfo={handleDetail} isMuted={isTrailerMuted} onToggleMute={toggleTrailerMute} />
+                                                </div>
+                                            )}
+                                            {selectedCategory === null && !searchQuery ? (
+                                                Object.entries(categoryPreviews).map(([id, items]) => (
+                                                    <HorizontalRow 
+                                                        key={id} 
+                                                        categoryId={id} 
+                                                        name={categories.find(c => c.category_id === id)?.category_name || "Catégorie"} 
+                                                        items={items} 
+                                                        type={type}
+                                                        onItemClick={handleGridClick} 
+                                                        onExplore={(cid) => handleCategorySelect(categories.find(c => c.category_id === cid) || null)} 
+                                                    />
+                                                ))
+                                            ) : (
+                                                <ItemGrid items={itemsToDisplay} type={type} onItemClick={handleGridClick} accountId={account.id} />
+                                            )}
+                                            <div className="h-24" />
+                                        </motion.div>
+                                    )}
+                                </AnimatePresence>
                             </div>
                         )}
                     </div>
                 </div>
             ) : (
                 // CLASSIC MODE (Existing Layout)
-                <div ref={classicScrollRef} className="h-full overflow-y-auto custom-scrollbar px-10 relative">
-                    {currentLevel === 'categories' ? (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 py-8 animate-in fade-in duration-300">
-                            {filteredCategories.map(cat => (
-                                <div key={cat.category_id} onClick={() => handleCategorySelect(cat)}
-                                    className="bg-fluent-layer hover:bg-fluent-layerHover border border-fluent-border p-5 rounded-window cursor-pointer transition-all flex items-center gap-4 group shadow-sm">
-                                    <Folder className="text-fluent-accent group-hover:scale-110 transition-transform" /> <span className="font-semibold text-sm">{cat.category_name}</span>
+                <div ref={classicScrollRef} className={`h-full overflow-y-auto custom-scrollbar relative ${viewMode === 'epg' && type === 'live' ? 'px-0' : 'px-10'}`}>
+                    <AnimatePresence mode="wait">
+                        {currentLevel === 'categories' ? (
+                            <motion.div 
+                                key="categories"
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -20 }}
+                                className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 py-8"
+                            >
+                                <div onClick={() => handleCategorySelect('favorites')}
+                                    className="bg-yellow-500/5 hover:bg-yellow-500/10 border border-yellow-500/20 p-5 rounded-window cursor-pointer transition-all flex items-center gap-4 group shadow-sm">
+                                    <Star className="text-yellow-500 group-hover:scale-110 transition-transform" /> <span className="font-bold text-sm text-yellow-500">Favoris</span>
                                 </div>
-                            ))}
-                        </div>
-                    ) : currentLevel === 'detail' && selectedItem ? (
-                        loading ? (
-                             <SkeletonLoader type={type} mode="detail" />
-                        ) : (
-                            <ItemDetailView 
-                                item={selectedItem} 
-                                detail={detailData} 
-                                loading={loading} 
-                                type={type} 
-                                onBack={handleNavigateBack}
-                                onClose={handleGoBack}
-                                onPlay={handlePlay} 
-                                onPlayEpisode={handlePlayEpisode}
-                                account={account}
-                                siblingItems={displayData}
-                                onSwitchItem={handleDetail}
-                            />
-                        )
-                    ) : viewMode === 'epg' && type === 'live' ? (
-                         <div className="relative h-full flex flex-col overflow-hidden w-full min-h-[600px]">
-                            {player && (
-                                <div 
-                                    className={`absolute z-40 bg-black shadow-2xl border-b border-white/10 transition-all duration-300
-                                        ${isPlayerExpanded ? 'inset-x-0 top-0' : 'top-[40px] left-0 w-[220px]'}
-                                    `}
-                                    style={{ height: isPlayerExpanded ? epgExpandedHeight : epgPlayerHeight }}
-                                >
-                                    <VideoPlayer 
-                                        url={player.url} 
-                                        title={player.title} 
-                                        type={player.type} 
-                                        onClose={handleClosePlayer}
-                                        playlist={type === 'live' ? displayData : undefined}
-                                        currentItem={player.currentItem}
-                                        onChannelSelect={handlePlay}
-                                        isEmbedded={true}
-                                        isMini={!isPlayerExpanded}
-                                        onToggleEmbed={() => setIsPlayerExpanded(!isPlayerExpanded)}
-                                        onMaximize={() => setViewMode('grid')}
+                                {filteredCategories.map((cat, index) => (
+                                    <div key={`${cat.category_id}-${index}`} onClick={() => handleCategorySelect(cat)}
+                                        className="bg-fluent-layer hover:bg-fluent-layerHover border border-fluent-border p-5 rounded-window cursor-pointer transition-all flex items-center gap-4 group shadow-sm">
+                                        <Folder className="text-fluent-accent group-hover:scale-110 transition-transform" /> <span className="font-semibold text-sm">{cat.category_name}</span>
+                                    </div>
+                                ))}
+                            </motion.div>
+                        ) : currentLevel === 'detail' && selectedItem ? (
+                            <motion.div
+                                key={`detail-${selectedItem.stream_id || selectedItem.series_id}`}
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                className="h-full"
+                            >
+                                {loading ? (
+                                    <SkeletonLoader type={type} mode="detail" />
+                                ) : (
+                                    <ItemDetailView 
+                                        item={selectedItem} 
+                                        detail={detailData} 
+                                        loading={loading} 
+                                        type={type} 
+                                        onBack={handleNavigateBack}
+                                        onClose={handleGoBack}
+                                        onPlay={handlePlay} 
+                                        onPlayEpisode={handlePlayEpisode}
                                         account={account}
+                                        siblingItems={displayData}
+                                        onSwitchItem={handleDetail}
                                     />
+                                )}
+                            </motion.div>
+                        ) : viewMode === 'epg' && type === 'live' ? (
+                            <motion.div 
+                                key="epg"
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                className="relative h-full flex flex-col overflow-hidden w-full min-h-[600px]"
+                            >
+                                {player && !isPlayerFullWindow && (
                                     <div 
-                                        className="absolute bottom-0 inset-x-0 h-1 cursor-ns-resize bg-white/10 hover:bg-fluent-accent transition-colors z-50"
-                                        onMouseDown={(e) => {
-                                            e.preventDefault();
-                                            resizeState.current = { startY: e.clientY, startHeight: isPlayerExpanded ? epgExpandedHeight : epgPlayerHeight };
-                                            setIsResizingEpgPlayer(true);
-                                        }}
-                                    />
-                                </div>
-                            )}
-                            <div className="flex-1 overflow-hidden">
-                                <EPGView 
-                                    channels={displayData} 
-                                    account={account} 
-                                    onChannelClick={handlePlay} 
-                                    fetchCached={fetchCached} 
-                                />
-                            </div>
-                        </div>
-                    ) : (
-                        <div className="pt-8 pb-20 relative min-h-[500px]">
-                            {loading ? <SkeletonLoader type={type} mode="grid" /> : 
-                            <div className="animate-in fade-in duration-300">
-                                {heroItem && (
-                                    <div ref={heroContainerRef}>
-                                        <HeroSection item={heroItem} detail={heroDetail} phase={heroPhase} isFading={isHeroFading} ytContainerId={ytContainerId} onNext={handleNextHero} onPlay={handlePlay} onInfo={handleDetail} isMuted={isTrailerMuted} onToggleMute={toggleTrailerMute} />
+                                        className={`absolute z-40 bg-black shadow-2xl border-b border-white/10 transition-all duration-300
+                                            ${isPlayerExpanded ? 'inset-x-0 top-0' : 'top-[40px] left-0 w-[220px]'}
+                                        `}
+                                        style={{ height: isPlayerExpanded ? epgExpandedHeight : epgPlayerHeight }}
+                                    >
+                                        <VideoPlayer 
+                                            url={player.url} 
+                                            title={player.title} 
+                                            type={player.type} 
+                                            onClose={handleClosePlayer}
+                                            playlist={type === 'live' ? displayData : undefined}
+                                            currentItem={player.currentItem}
+                                            onChannelSelect={handlePlay}
+                                            isEmbedded={true}
+                                            isMini={!isPlayerExpanded}
+                                            onToggleEmbed={() => setIsPlayerExpanded(!isPlayerExpanded)}
+                                            onFullWindow={() => setIsPlayerFullWindow(true)}
+                                            onRestore={undefined}
+                                            account={account}
+                                        />
+                                        <div 
+                                            className="absolute bottom-0 inset-x-0 h-1 cursor-ns-resize bg-white/10 hover:bg-fluent-accent transition-colors z-50"
+                                            onMouseDown={(e) => {
+                                                e.preventDefault();
+                                                resizeState.current = { startY: e.clientY, startHeight: isPlayerExpanded ? epgExpandedHeight : epgPlayerHeight };
+                                                setIsResizingEpgPlayer(true);
+                                            }}
+                                        />
                                     </div>
                                 )}
-                                <ItemGrid items={displayData} type={type} onItemClick={handleGridClick} accountId={account.id} />
-                            </div>}
-                        </div>
-                    )}
+                                <div className="flex-1 overflow-hidden">
+                                    <EPGView 
+                                        channels={itemsToDisplay} 
+                                        account={account} 
+                                        onChannelClick={handlePlay} 
+                                    />
+                                </div>
+                            </motion.div>
+                        ) : (
+                            <motion.div 
+                                key={`grid-${selectedCategory?.category_id || 'all'}`}
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                className="pt-8 pb-20 relative min-h-[500px]"
+                            >
+                                {loading ? <SkeletonLoader type={type} mode="grid" /> : 
+                                <div>
+                                    {heroItem && (
+                                        <div ref={heroContainerRef}>
+                                            <HeroSection item={heroItem} detail={heroDetail} phase={heroPhase} isFading={isHeroFading} ytContainerId={ytContainerId} onNext={handleNextHero} onPlay={handlePlay} onInfo={handleDetail} isMuted={isTrailerMuted} onToggleMute={toggleTrailerMute} />
+                                        </div>
+                                    )}
+                                    <ItemGrid items={itemsToDisplay} type={type} onItemClick={handleGridClick} accountId={account.id} />
+                                </div>}
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
                 </div>
             )}
         </div>

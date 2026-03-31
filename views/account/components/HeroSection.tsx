@@ -3,6 +3,7 @@ import React from 'react';
 import { Play, Info as InfoIcon, ChevronLast, Image as ImageIcon, Star, Film, Tag, Volume2, VolumeX } from 'lucide-react';
 import { Button } from '../../../components/Win11UI';
 import { XtreamStream } from '../../../types';
+import { decodeBase64 } from '../../../utils';
 
 interface HeroSectionProps {
   item: XtreamStream;
@@ -16,31 +17,6 @@ interface HeroSectionProps {
   isMuted?: boolean;
   onToggleMute?: () => void;
 }
-
-// Helper to decode Base64 strings safely and fix encoding issues
-const decodeBase64 = (str: string) => {
-    if (!str) return "";
-    let decoded = str;
-
-    // 1. Try Base64 decoding if it looks like Base64 (no spaces, valid chars)
-    if (!str.includes(' ') && /^([A-Za-z0-9+/]{4})*([A-Za-z0-9+/]{3}=|[A-Za-z0-9+/]{2}==)?$/.test(str)) {
-         try {
-             const raw = window.atob(str);
-             if (!/[\x00-\x08\x0B\x0C\x0E-\x1F]/.test(raw)) {
-                 decoded = raw;
-             }
-         } catch (e) {
-             // Not base64
-         }
-    }
-
-    // 2. Fix UTF-8 interpreted as Latin-1 (Mojibake)
-    try {
-        return decodeURIComponent(escape(decoded));
-    } catch (e) {
-        return decoded;
-    }
-};
 
 export const HeroSection: React.FC<HeroSectionProps> = ({ 
   item, detail, phase, isFading, ytContainerId, onNext, onPlay, onInfo, isMuted, onToggleMute 

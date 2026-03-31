@@ -1,15 +1,18 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { ArrowLeft, Star, Play, Youtube, Download, Clock, Calendar, Film, User, Hash, AlignLeft, Flag, X, ChevronRight, ChevronLeft, Sparkles, LayoutGrid, Layers, Tv, CheckCircle2, RotateCcw } from 'lucide-react';
 import { Button } from '../../../components/Win11UI';
 import { XtreamStream, XtreamAccount } from '../../../types';
 import { useUserPreferences } from '../../../hooks/useUserPreferences';
+import { decodeBase64 } from '../../../utils';
+import { downloadService } from '../../../src/services/DownloadService';
 
 interface ItemDetailViewProps {
   item: XtreamStream;
   detail: any;
   loading: boolean;
-  type: string;
+  type: 'live' | 'vod' | 'series';
   onBack: () => void;
   onClose?: () => void;
   onPlay: (item: XtreamStream) => void;
@@ -19,31 +22,6 @@ interface ItemDetailViewProps {
   onSwitchItem?: (item: XtreamStream) => void;
 }
 
-// Helper to decode Base64 strings safely and fix encoding issues
-const decodeBase64 = (str: string) => {
-    if (!str) return "";
-    let decoded = str;
-
-    // 1. Try Base64 decoding if it looks like Base64 (no spaces, valid chars)
-    if (!str.includes(' ') && /^([A-Za-z0-9+/]{4})*([A-Za-z0-9+/]{3}=|[A-Za-z0-9+/]{2}==)?$/.test(str)) {
-         try {
-             const raw = window.atob(str);
-             if (!/[\x00-\x08\x0B\x0C\x0E-\x1F]/.test(raw)) {
-                 decoded = raw;
-             }
-         } catch (e) {
-             // Not base64
-         }
-    }
-
-    // 2. Fix UTF-8 interpreted as Latin-1 (Mojibake)
-    try {
-        return decodeURIComponent(escape(decoded));
-    } catch (e) {
-        return decoded;
-    }
-};
-
 export const ItemDetailView: React.FC<ItemDetailViewProps> = ({ item, detail, loading, type, onBack, onClose, onPlay, onPlayEpisode, account, siblingItems = [], onSwitchItem }) => {
     const [showTrailer, setShowTrailer] = useState(false);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -52,7 +30,7 @@ export const ItemDetailView: React.FC<ItemDetailViewProps> = ({ item, detail, lo
     // Preferences Hook
     const { isFavorite, toggleFavorite, getProgress, clearProgress } = useUserPreferences(account.id);
     const favoriteId = item.stream_id || item.series_id;
-    const isFav = isFavorite(favoriteId);
+    const isFav = isFavorite(favoriteId, type);
     
     // Resume Logic
     const progressId = item.stream_id || item.series_id; // For movies, ID is stream_id
@@ -131,9 +109,63 @@ export const ItemDetailView: React.FC<ItemDetailViewProps> = ({ item, detail, lo
         return `${account.protocol}://${account.host}:${account.port}/series/${account.username}/${account.password}/${episode.id}.${ext}`;
     };
 
-    const handleDownload = () => {
-        if (downloadUrl) {
-            window.open(downloadUrl, '_blank');
+    const handleDownload = async () => {
+        if (!downloadUrl) return;
+
+        try {
+            // @ts-ignore - File System Access API
+            const handle = await window.showSaveFilePicker({
+                suggestedName: `${title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.mp4`,
+                types: [{
+                    description: 'Video File',
+                    accept: { 'video/mp4': ['.mp4'], 'video/x-matroska': ['.mkv'] },
+                }],
+            });
+
+            await downloadService.addDownload({
+                id: (item.stream_id || item.series_id || 0).toString(),
+                name: title,
+                url: downloadUrl,
+                fileName: handle.name,
+                fileHandle: handle,
+                type: 'movie',
+                accountId: account.id
+            });
+        } catch (err: any) {
+            if (err.name !== 'AbortError') {
+                console.error('Failed to start download:', err);
+            }
+        }
+    };
+
+    const handleDownloadEpisode = async (e: React.MouseEvent, episode: any) => {
+        e.stopPropagation();
+        const url = getEpisodeDownloadUrl(episode);
+        const epTitle = `${title} - S${selectedSeason}E${episode.episode_num} - ${decodeBase64(episode.title)}`;
+
+        try {
+            // @ts-ignore - File System Access API
+            const handle = await window.showSaveFilePicker({
+                suggestedName: `${epTitle.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.mp4`,
+                types: [{
+                    description: 'Video File',
+                    accept: { 'video/mp4': ['.mp4'], 'video/x-matroska': ['.mkv'] },
+                }],
+            });
+
+            await downloadService.addDownload({
+                id: episode.id.toString(),
+                name: epTitle,
+                url: url,
+                fileName: handle.name,
+                fileHandle: handle,
+                type: 'episode',
+                accountId: account.id
+            });
+        } catch (err: any) {
+            if (err.name !== 'AbortError') {
+                console.error('Failed to start download:', err);
+            }
         }
     };
 
@@ -182,16 +214,25 @@ export const ItemDetailView: React.FC<ItemDetailViewProps> = ({ item, detail, lo
     return (
         <div ref={mainScrollRef} className="h-full overflow-y-auto custom-scrollbar relative">
             {/* Immersive Backdrop */}
-            <div className="absolute inset-0 h-[60vh] opacity-40 pointer-events-none">
+            <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 0.4 }}
+                transition={{ duration: 1 }}
+                className="absolute inset-0 h-[60vh] pointer-events-none"
+            >
                 {backdrop && <img src={backdrop} className="w-full h-full object-cover mask-image-b" alt="" />}
                 <div className="absolute inset-0 bg-gradient-to-t from-[#191919] via-[#191919]/80 to-transparent" />
                 <div className="absolute inset-0 bg-gradient-to-r from-[#191919] via-[#191919]/40 to-transparent" />
-            </div>
+            </motion.div>
 
-            <div className="relative z-10 p-8 md:p-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="relative z-10 p-8 md:p-12">
                 
                 {/* Navigation Controls */}
-                <div className="flex items-center gap-3 mb-8">
+                <motion.div 
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    className="flex items-center gap-3 mb-8"
+                >
                     <button 
                         onClick={onBack} 
                         className="flex items-center gap-2 text-white/70 hover:text-white transition-colors text-sm font-semibold uppercase tracking-wider bg-black/20 hover:bg-black/40 px-4 py-2 rounded-full backdrop-blur-md border border-white/5"
@@ -206,14 +247,22 @@ export const ItemDetailView: React.FC<ItemDetailViewProps> = ({ item, detail, lo
                             <LayoutGrid size={16} /> Catalogue
                         </button>
                     )}
-                </div>
+                </motion.div>
 
                 <div className="flex flex-col lg:flex-row gap-12 items-start max-w-7xl mx-auto mb-12">
                     {/* Left Column: Poster & Actions */}
-                    <div className="w-full lg:w-[350px] shrink-0 flex flex-col gap-6">
+                    <motion.div 
+                        layoutId={`item-container-${favoriteId}`}
+                        className="w-full lg:w-[350px] shrink-0 flex flex-col gap-6"
+                    >
                         <div className="aspect-[2/3] rounded-xl overflow-hidden shadow-2xl border border-white/10 relative group bg-white/5">
                             {poster ? (
-                                <img src={poster} className="w-full h-full object-cover" alt={title} />
+                                <motion.img 
+                                    layoutId={`poster-${favoriteId}`}
+                                    src={poster} 
+                                    className="w-full h-full object-cover" 
+                                    alt={title} 
+                                />
                             ) : (
                                 <div className="w-full h-full flex items-center justify-center text-white/10">
                                     <Film size={64} />
@@ -227,7 +276,12 @@ export const ItemDetailView: React.FC<ItemDetailViewProps> = ({ item, detail, lo
                             )}
                         </div>
                         
-                        <div className="grid grid-cols-2 gap-3">
+                        <motion.div 
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0.3 }}
+                            className="grid grid-cols-2 gap-3"
+                        >
                              {rating && (
                                  <div className="bg-white/5 border border-white/10 rounded-lg p-3 flex flex-col items-center justify-center gap-1">
                                      <Star size={18} className="text-yellow-400 fill-current" />
@@ -242,11 +296,16 @@ export const ItemDetailView: React.FC<ItemDetailViewProps> = ({ item, detail, lo
                                      <span className="text-[10px] text-white/50 uppercase tracking-widest">Durée</span>
                                  </div>
                              )}
-                        </div>
-                    </div>
+                        </motion.div>
+                    </motion.div>
 
                     {/* Right Column: Details */}
-                    <div className="flex-1 min-w-0 pt-2">
+                    <motion.div 
+                        initial={{ opacity: 0, x: 20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: 0.2 }}
+                        className="flex-1 min-w-0 pt-2"
+                    >
                         <div className="mb-6">
                             <div className="flex flex-wrap items-center gap-3 mb-4">
                                 <span className="bg-fluent-accent text-black px-3 py-1 rounded text-xs font-bold uppercase tracking-widest">{type}</span>
@@ -262,9 +321,12 @@ export const ItemDetailView: React.FC<ItemDetailViewProps> = ({ item, detail, lo
                                 ))}
                             </div>
                             
-                            <h1 className="text-4xl md:text-5xl font-bold text-white mb-6 leading-tight drop-shadow-xl">
+                            <motion.h1 
+                                layoutId={`title-${favoriteId}`}
+                                className="text-4xl md:text-5xl font-bold text-white mb-6 leading-tight drop-shadow-xl"
+                            >
                                 {title}
-                            </h1>
+                            </motion.h1>
 
                              {/* Progress Bar in Details */}
                             {hasProgress && type === 'vod' && (
@@ -294,7 +356,7 @@ export const ItemDetailView: React.FC<ItemDetailViewProps> = ({ item, detail, lo
 
                                 <Button 
                                     variant="secondary" 
-                                    onClick={() => toggleFavorite(favoriteId)} 
+                                    onClick={() => toggleFavorite(item, type)} 
                                     className={`!px-4 h-12 border-white/10 bg-white/5 hover:bg-white/10 ${isFav ? 'text-red-500' : 'text-white'}`}
                                     title={isFav ? "Retirer des favoris" : "Ajouter aux favoris"}
                                 >
@@ -352,7 +414,7 @@ export const ItemDetailView: React.FC<ItemDetailViewProps> = ({ item, detail, lo
                                 </div>
                             </div>
                         )}
-                    </div>
+                    </motion.div>
                 </div>
 
                 {type === 'series' && seasons.length > 0 && (
@@ -446,10 +508,7 @@ export const ItemDetailView: React.FC<ItemDetailViewProps> = ({ item, detail, lo
                                                 <Play fill="currentColor" size={18} />
                                             </div>
                                             <button 
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    window.open(getEpisodeDownloadUrl(ep), '_blank');
-                                                }}
+                                                onClick={(e) => handleDownloadEpisode(e, ep)}
                                                 className="w-10 h-10 rounded-full bg-white/10 text-white hover:bg-white/20 flex items-center justify-center opacity-0 group-hover:opacity-100 scale-75 group-hover:scale-100 transition-all shadow-lg border border-white/5"
                                                 title="Télécharger"
                                             >
@@ -525,7 +584,7 @@ export const ItemDetailView: React.FC<ItemDetailViewProps> = ({ item, detail, lo
                 )}
             </div>
 
-            {showTrailer && trailerEmbedUrl && (
+        {showTrailer && trailerEmbedUrl && (
                 <div 
                     className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md animate-in fade-in duration-300"
                     onClick={() => setShowTrailer(false)}

@@ -1,6 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { CheckCircle2, Minus, Square, X } from 'lucide-react';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { db } from './db';
 import { XtreamAccount, ViewState, ModalConfig, ModalType, SavedServer, AppBackup } from './types';
 import { AcrylicPanel, Modal } from './components/Win11UI';
 import { generateId } from './utils';
@@ -13,6 +15,8 @@ import { AccountList } from './views/AccountList';
 import { SettingsView } from './views/SettingsView';
 import { AccountDetailView } from './views/account/AccountDetailView';
 import { ServerLibrary } from './views/ServerLibrary';
+import { DownloadManager } from './views/account/components/DownloadManager';
+import { VideoPlayer } from './components/VideoPlayer';
 
 // --- Custom Title Bar Component ---
 const TitleBar: React.FC = () => {
@@ -47,10 +51,11 @@ const TitleBar: React.FC = () => {
 export default function App() {
   const [activeView, setActiveView] = useState<ViewState>('dashboard');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [playingDownload, setPlayingDownload] = useState<{ url: string, title: string, type: 'vod' | 'series' } | null>(null);
   
-  // Data State
-  const [accounts, setAccounts] = useState<XtreamAccount[]>([]);
-  const [savedServers, setSavedServers] = useState<SavedServer[]>([]);
+  // Data State (Dexie)
+  const accounts = useLiveQuery(() => db.accounts.toArray()) || [];
+  const savedServers = useLiveQuery(() => db.servers.toArray()) || [];
   
   // View/Selection State
   const [editingAccount, setEditingAccount] = useState<XtreamAccount | null>(null);
@@ -71,41 +76,50 @@ export default function App() {
   // Toast State
   const [toast, setToast] = useState<{ message: string; show: boolean }>({ message: '', show: false });
 
-  // Load from local storage on mount
+  // Migration & Initial Load
   useEffect(() => {
-    const saved = localStorage.getItem('xtream_accounts');
-    const savedSrv = localStorage.getItem('xtream_servers');
-    const savedSidebarState = localStorage.getItem('sidebar_collapsed');
-    
-    if (saved) {
-      try {
-        setAccounts(JSON.parse(saved));
-      } catch (e) {
-        console.error("Failed to load accounts", e);
-      }
-    }
-    
-    if (savedSrv) {
+    const migrate = async () => {
+      const saved = localStorage.getItem('xtream_accounts');
+      const savedSrv = localStorage.getItem('xtream_servers');
+      
+      if (saved) {
         try {
-            setSavedServers(JSON.parse(savedSrv));
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            const count = await db.accounts.count();
+            if (count === 0) {
+              await db.accounts.bulkAdd(parsed);
+              localStorage.removeItem('xtream_accounts');
+            }
+          }
         } catch (e) {
-            console.error("Failed to load servers", e);
+          console.error("Failed to migrate accounts", e);
         }
-    }
+      }
+      
+      if (savedSrv) {
+        try {
+          const parsed = JSON.parse(savedSrv);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            const count = await db.servers.count();
+            if (count === 0) {
+              await db.servers.bulkAdd(parsed);
+              localStorage.removeItem('xtream_servers');
+            }
+          }
+        } catch (e) {
+          console.error("Failed to migrate servers", e);
+        }
+      }
+    };
 
+    migrate();
+    
+    const savedSidebarState = localStorage.getItem('sidebar_collapsed');
     if (savedSidebarState !== null) {
       setIsSidebarCollapsed(savedSidebarState === 'true');
     }
   }, []);
-
-  // Save to local storage on change
-  useEffect(() => {
-    localStorage.setItem('xtream_accounts', JSON.stringify(accounts));
-  }, [accounts]);
-
-  useEffect(() => {
-      localStorage.setItem('xtream_servers', JSON.stringify(savedServers));
-  }, [savedServers]);
 
   useEffect(() => {
     localStorage.setItem('sidebar_collapsed', isSidebarCollapsed.toString());
@@ -142,31 +156,33 @@ export default function App() {
 
   // --- Account Logic ---
 
-  const handleSaveAccount = (account: XtreamAccount, silent = false) => {
-    setAccounts(prev => {
-      const exists = prev.find(a => a.id === account.id);
-      if (exists) {
-        return prev.map(a => a.id === account.id ? account : a);
+  const handleSaveAccount = async (account: XtreamAccount, silent = false) => {
+    try {
+      await db.accounts.put(account);
+      
+      if (!silent) {
+          showModal(
+            'success',
+            'Account Saved',
+            `The account "${account.name}" has been successfully ${editingAccount ? 'updated' : 'added'}.`,
+            () => {
+               setEditingAccount(null);
+               setActiveView('manage-accounts');
+            },
+            "OK"
+          );
       }
-      return [...prev, account];
-    });
-    
-    if (!silent) {
-        showModal(
-          'success',
-          'Account Saved',
-          `The account "${account.name}" has been successfully ${editingAccount ? 'updated' : 'added'}.`,
-          () => {
-             setEditingAccount(null);
-             setActiveView('manage-accounts');
-          },
-          "OK"
-        );
+    } catch (error) {
+      console.error("Failed to save account", error);
+      showModal('error', 'Error', 'Failed to save account to database.');
     }
   };
 
-  const toggleFavorite = (id: string) => {
-    setAccounts(prev => prev.map(a => a.id === id ? { ...a, isFavorite: !a.isFavorite } : a));
+  const toggleFavorite = async (id: string) => {
+    const account = await db.accounts.get(id);
+    if (account) {
+      await db.accounts.update(id, { isFavorite: !account.isFavorite });
+    }
   };
 
   const deleteAccount = (id: string) => {
@@ -174,8 +190,9 @@ export default function App() {
       'confirm',
       'Delete Account',
       'Are you sure you want to permanently remove this account? This action cannot be undone.',
-      () => {
-        setAccounts(prev => prev.filter(a => a.id !== id));
+      async () => {
+        await db.accounts.delete(id);
+        await db.clearAccountData(id);
         if (editingAccount?.id === id) {
           setEditingAccount(null);
           setActiveView('manage-accounts');
@@ -198,14 +215,8 @@ export default function App() {
 
   // --- Server Library Logic ---
 
-  const handleSaveServer = (server: SavedServer) => {
-      setSavedServers(prev => {
-          const exists = prev.find(s => s.id === server.id);
-          if (exists) {
-              return prev.map(s => s.id === server.id ? server : s);
-          }
-          return [...prev, server];
-      });
+  const handleSaveServer = async (server: SavedServer) => {
+      await db.servers.put(server);
       handleToast("Server saved to library");
   };
 
@@ -214,8 +225,8 @@ export default function App() {
           'confirm',
           'Delete Server',
           'Remove this server from your library? Linked accounts will not be deleted.',
-          () => {
-             setSavedServers(prev => prev.filter(s => s.id !== id));
+          async () => {
+             await db.servers.delete(id);
              handleToast("Server removed");
           }
       );
@@ -285,7 +296,7 @@ export default function App() {
     }
   };
 
-  const handleImportData = (data: any) => {
+  const handleImportData = async (data: any) => {
     let importedAccounts: any[] = [];
     let importedServers: any[] = [];
 
@@ -327,23 +338,23 @@ export default function App() {
     // Merge Accounts
     let newAccountsCount = 0;
     if (validAccounts.length > 0) {
-        setAccounts(prev => {
-            const existingIds = new Set(prev.map(a => a.id));
-            const uniqueNew = validAccounts.filter(a => !existingIds.has(a.id));
-            newAccountsCount = uniqueNew.length;
-            return [...prev, ...uniqueNew];
-        });
+        const existingIds = new Set(accounts.map(a => a.id));
+        const uniqueNew = validAccounts.filter(a => !existingIds.has(a.id));
+        newAccountsCount = uniqueNew.length;
+        if (newAccountsCount > 0) {
+            await db.accounts.bulkAdd(uniqueNew);
+        }
     }
 
     // Merge Servers
     let newServersCount = 0;
     if (validServers.length > 0) {
-        setSavedServers(prev => {
-            const existingIds = new Set(prev.map(s => s.id));
-            const uniqueNew = validServers.filter(s => !existingIds.has(s.id));
-            newServersCount = uniqueNew.length;
-            return [...prev, ...uniqueNew];
-        });
+        const existingIds = new Set(savedServers.map(s => s.id));
+        const uniqueNew = validServers.filter(s => !existingIds.has(s.id));
+        newServersCount = uniqueNew.length;
+        if (newServersCount > 0) {
+            await db.servers.bulkAdd(uniqueNew);
+        }
     }
     
     showModal(
@@ -363,6 +374,7 @@ export default function App() {
            <AccountDetailView 
               account={selectedAccount} 
               onBack={() => handleSetView('manage-accounts')} 
+              onPlayDownload={(url, title, type) => setPlayingDownload({ url, title, type })}
            />
         ) : (
           <>
@@ -426,8 +438,26 @@ export default function App() {
                     onExport={handleExportData}
                 />
               )}
+
+              {activeView === 'downloads' && (
+                <DownloadManager 
+                  onPlay={(url, title, type) => setPlayingDownload({ url, title, type })}
+                />
+              )}
             </main>
           </>
+        )}
+
+        {playingDownload && (
+          <VideoPlayer 
+            url={playingDownload.url}
+            title={playingDownload.title}
+            type={playingDownload.type}
+            onClose={() => {
+              URL.revokeObjectURL(playingDownload.url);
+              setPlayingDownload(null);
+            }}
+          />
         )}
 
         {/* Toast Notification */}

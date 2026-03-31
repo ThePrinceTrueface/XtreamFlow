@@ -186,14 +186,14 @@ export const AccountList: React.FC<{
             )}
           </div>
         ) : (
-            <div className={viewMode === 'grid' ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" : "flex flex-col gap-3"}>
+            <div className={viewMode === 'grid' ? "grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4" : "flex flex-col gap-3"}>
               {sortedAccounts.map(acc => (
                 <div 
                     key={acc.id} 
                     className={`group bg-win-card hover:bg-win-cardHover border border-win-border rounded-lg transition-all relative shrink-0
-                        ${viewMode === 'grid' ? 'p-5 flex flex-col h-full hover:shadow-lg hover:-translate-y-1' : 'p-4 flex items-center justify-between'}`}
+                        ${viewMode === 'grid' ? 'p-4 flex flex-col h-full hover:shadow-lg hover:-translate-y-1' : 'p-4 flex items-center justify-between'}`}
                 >
-                  <div className={`flex ${viewMode === 'grid' ? 'flex-col items-start gap-4 mb-4' : 'items-center gap-4'}`}>
+                  <div className={`flex w-full ${viewMode === 'grid' ? 'flex-col items-stretch gap-4 mb-4' : 'items-center gap-4'}`}>
                     <div className="relative shrink-0">
                         <div className={`rounded-full bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center text-white font-bold shadow-inner
                             ${viewMode === 'grid' ? 'w-14 h-14 text-xl' : 'w-10 h-10 text-sm'}`}>
@@ -215,12 +215,12 @@ export const AccountList: React.FC<{
                         </div>
                     </div>
                     
-                    <div className="flex flex-col gap-1 min-w-0">
-                      <h3 className={`font-medium text-white truncate ${viewMode === 'grid' ? 'text-lg' : 'text-base'}`}>
+                    <div className="flex flex-col gap-1 min-w-0 flex-1">
+                      <h3 className={`font-medium text-white truncate ${viewMode === 'grid' ? 'text-lg' : 'text-base'}`} title={acc.name}>
                         {acc.name}
                       </h3>
-                      <div className="flex items-center gap-2 text-xs text-win-subtext truncate">
-                        <span className="bg-white/10 px-1.5 py-0.5 rounded text-[10px] uppercase tracking-wider">{acc.protocol}</span>
+                      <div className="flex items-center gap-2 text-xs text-win-subtext truncate" title={`${acc.host}:${acc.port}`}>
+                        <span className="bg-white/10 px-1.5 py-0.5 rounded text-[10px] uppercase tracking-wider shrink-0">{acc.protocol}</span>
                         <span className="truncate">{acc.host}:{acc.port}</span>
                       </div>
                       {acc.tags && acc.tags.length > 0 && (
@@ -240,7 +240,7 @@ export const AccountList: React.FC<{
 
                   {/* Actions */}
                   <div className={`flex items-center gap-2 transition-opacity
-                      ${viewMode === 'grid' ? 'mt-auto pt-4 border-t border-white/5 w-full justify-between' : 'opacity-0 group-hover:opacity-100'}`}>
+                      ${viewMode === 'grid' ? 'mt-auto pt-4 border-t border-white/5 w-full justify-between flex-wrap gap-y-2 gap-x-1' : 'opacity-0 group-hover:opacity-100'}`}>
                     
                     {/* Primary Action Button */}
                     <Button 
@@ -285,11 +285,12 @@ export const AccountList: React.FC<{
                         {copiedId === acc.id ? <CheckCircle2 size={14} /> : <Copy size={14} />}
                         </Button>
                         <Button 
-                        variant="ghost" 
-                        className="!px-2 text-red-400 hover:bg-red-500/10 hover:text-red-300"
+                        variant="secondary" 
+                        className="!px-2 !py-1.5 text-xs text-red-400 hover:bg-red-500/10 hover:text-red-300 hover:border-red-500/30"
                         onClick={() => onDelete(acc.id)}
+                        title="Delete Account"
                         >
-                        <Trash2 size={16} />
+                        <Trash2 size={14} />
                         </Button>
                     </div>
                   </div>

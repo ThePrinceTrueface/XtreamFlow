@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Play, Loader2 } from 'lucide-react';
 import { XtreamStream, XtreamEPGProgram, XtreamAccount } from '../../../types';
-import { createProxyUrl } from '../../../utils';
+import { createProxyUrl, decodeBase64 } from '../../../utils';
+import { cacheService } from '../../../src/services/cacheService';
 
 // Forward ref to support scrollTo
 const List = React.forwardRef((props: any, ref: any) => {
@@ -117,7 +118,6 @@ interface EPGViewProps {
   channels: XtreamStream[];
   account: XtreamAccount;
   onChannelClick: (channel: XtreamStream) => void;
-  fetchCached: (url: string) => Promise<any>;
 }
 
 const HOUR_WIDTH = 300; // Pixels per hour
@@ -126,42 +126,7 @@ const ROW_HEIGHT = 60;
 const SIDEBAR_WIDTH = 220;
 const BATCH_SIZE = 10; // Fetch EPG for 10 channels at a time
 
-// Helper to decode Base64 strings safely and fix encoding issues
-const decodeBase64 = (str: string) => {
-    if (!str) return "";
-    let decoded = str;
-
-    // 1. Try Base64 decoding if it looks like Base64 (no spaces, valid chars)
-    if (!str.includes(' ') && /^([A-Za-z0-9+/]{4})*([A-Za-z0-9+/]{3}=|[A-Za-z0-9+/]{2}==)?$/.test(str)) {
-         try {
-             const raw = window.atob(str);
-             // If atob succeeds, we have a binary string.
-             // We'll try to decode it as UTF-8 in step 2.
-             // But first, check for control characters to avoid false positives (e.g. "Superman")
-             // Real UTF-8 text shouldn't have many control chars (0-31), except \t, \n, \r.
-             if (!/[\x00-\x08\x0B\x0C\x0E-\x1F]/.test(raw)) {
-                 decoded = raw;
-             }
-         } catch (e) {
-             // Not base64
-         }
-    }
-
-    // 2. Fix UTF-8 interpreted as Latin-1 (Mojibake)
-    // This handles both:
-    // - Base64 decoded output (which is binary string) -> UTF-8
-    // - Plain text input that was already Mojibake (e.g. "SignÃ©") -> UTF-8
-    try {
-        return decodeURIComponent(escape(decoded));
-    } catch (e) {
-        // If decodeURIComponent fails (e.g. invalid UTF-8 sequence), return the string as-is.
-        // This handles cases where the string was already correct UTF-8 (e.g. "Signé") 
-        // because escape("é") -> "%E9" which throws in decodeURIComponent.
-        return decoded;
-    }
-};
-
-export const EPGView: React.FC<EPGViewProps> = ({ channels, account, onChannelClick, fetchCached }) => {
+export const EPGView: React.FC<EPGViewProps> = ({ channels, account, onChannelClick }) => {
   const [epgData, setEpgData] = useState<Record<string, XtreamEPGProgram[]>>({});
   const [loading, setLoading] = useState<Record<string, boolean>>({});
   const [currentTime, setCurrentTime] = useState(Date.now());
@@ -222,19 +187,10 @@ export const EPGView: React.FC<EPGViewProps> = ({ channels, account, onChannelCl
       
       const promises = toFetch.map(async (streamId) => {
           try {
-            const baseUrl = `${account.protocol}://${account.host}:${account.port}/player_api.php`;
-            const url = createProxyUrl(`${baseUrl}?username=${account.username}&password=${account.password}&action=get_short_epg&stream_id=${streamId}&limit=10`);
-            
-            const data = await fetchCached(url);
-            if (data && data.epg_listings && Array.isArray(data.epg_listings)) {
-                const decodedListings = data.epg_listings.map((p: any) => ({
-                    ...p,
-                    title: decodeBase64(p.title),
-                    description: decodeBase64(p.description)
-                }));
-
+            const data = await cacheService.getEPG(account, streamId);
+            if (Array.isArray(data)) {
                 // 1. Normalize timestamps first
-                const normalizedListings = decodedListings.map((p: any) => {
+                const normalizedListings = data.map((p: any) => {
                     let start = p.start_timestamp;
                     let end = p.stop_timestamp;
                     // Heuristic for seconds vs ms
@@ -268,25 +224,17 @@ export const EPGView: React.FC<EPGViewProps> = ({ channels, account, onChannelCl
                     // Check for overlap
                     if (prog.start_timestamp < lastProgram.stop_timestamp) {
                         // If current program is fully contained within the last one, skip it
-                        // (This handles duplicates and nested incorrect entries)
                         if (prog.stop_timestamp <= lastProgram.stop_timestamp) {
                             continue;
                         }
                         
-                        // If it's a partial overlap (starts before last ends, but ends after),
-                        // we prioritize the new program and cut the previous one short.
-                        // This assumes EPG is sequential and the later start time implies the next show.
+                        // If it's a partial overlap, cut previous one short
                         lastProgram.stop_timestamp = prog.start_timestamp;
                         
-                        // If clamping made the last program invalid (0 duration), remove it
+                        // If clamping made the last program invalid, remove it
                         if (lastProgram.stop_timestamp <= lastProgram.start_timestamp) {
                             sanitizedListings.pop();
-                            // Update lastProgram to the one before that (if any), or null
                             lastProgram = sanitizedListings.length > 0 ? sanitizedListings[sanitizedListings.length - 1] : null;
-                            
-                            // If we popped, we might need to re-check overlap with the *new* lastProgram.
-                            // But for simplicity, let's just add the current one. 
-                            // A perfect algo would be recursive or use a while loop, but this is likely sufficient.
                         }
                     }
 
@@ -319,7 +267,7 @@ export const EPGView: React.FC<EPGViewProps> = ({ channels, account, onChannelCl
           return next;
       });
 
-  }, [account, fetchCached]); // Removed epgData and loading dependencies
+  }, [account]); // Removed epgData and loading dependencies
 
   // Detect visible rows and trigger fetch
   const onItemsRendered = useCallback(({ visibleStartIndex, visibleStopIndex }: any) => {

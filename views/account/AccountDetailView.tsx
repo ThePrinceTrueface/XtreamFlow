@@ -1,11 +1,13 @@
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { RefreshCw, AlertCircle, Activity, Calendar, Users, Server, Info as InfoIcon, Play, Wrench, CheckCircle2, Film, Tv, Clapperboard, BarChart3, X, Wifi, Gauge, ArrowDown, Download, ShieldCheck, Database, LayoutGrid } from 'lucide-react';
 import { XtreamAccount, XtreamAuthResponse } from '../../types';
 import { Card, Button, Modal } from '../../components/Win11UI';
 import { calculateDaysRemaining, formatDate, createProxyUrl } from '../../utils';
 import { AccountSidebar } from '../../components/Sidebars';
 import { CategoryBrowser } from './CategoryBrowser';
+import { DownloadManager } from './components/DownloadManager';
+import { cacheService } from '../../src/services/cacheService';
 
 interface RevisionResults {
   userInfo: any;
@@ -26,7 +28,7 @@ interface SpeedTestMetrics {
     error?: string;
 }
 
-export const AccountDetailView: React.FC<{ account: XtreamAccount; onBack: () => void }> = ({ account, onBack }) => {
+export const AccountDetailView: React.FC<{ account: XtreamAccount; onBack: () => void; onPlayDownload?: (url: string, title: string, type: 'vod' | 'series') => void }> = ({ account, onBack, onPlayDownload }) => {
   const [activeTab, setActiveTab] = useState('info');
   const [visitedTabs, setVisitedTabs] = useState<Set<string>>(new Set(['info']));
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -144,44 +146,36 @@ export const AccountDetailView: React.FC<{ account: XtreamAccount; onBack: () =>
 
       try {
           // Step 1: Auth Info
-          setRevisionProgress({ step: 'Authenticating...', percent: 10, details: 'Verifying credentials and fetching server metadata' });
+          setRevisionProgress({ step: 'Authenticating...', percent: 5, details: 'Verifying credentials and fetching server metadata' });
           const authUrl = createProxyUrl(`${account.protocol}://${account.host}:${account.port}/player_api.php?username=${account.username}&password=${account.password}`);
           const authData = await fetchCached(authUrl);
           results.userInfo = authData.user_info;
           results.serverInfo = authData.server_info;
           
-          // Step 2: Live Categories
-          setRevisionProgress({ step: 'Analyzing Live TV...', percent: 25, details: 'Fetching channel categories' });
-          const liveCats = await fetchCached(buildApiUrl('get_live_categories'));
-          results.live.categories = Array.isArray(liveCats) ? liveCats.length : 0;
+          // Use cacheService for prefetching and counting
+          await cacheService.prefetchCatalogue(account, (step, percent) => {
+              setRevisionProgress({ step, percent: 5 + (percent * 0.9), details: 'Caching data to IndexedDB for offline access' });
+          });
 
-          // Step 3: Live Streams
-          setRevisionProgress({ step: 'Analyzing Live TV...', percent: 40, details: 'Counting active channels' });
-          const liveStreams = await fetchCached(buildApiUrl('get_live_streams'));
-          results.live.streams = Array.isArray(liveStreams) ? liveStreams.length : 0;
+          // Fetch counts from DB
+          const [liveCats, liveStreams, vodCats, vodStreams, seriesCats, seriesStreams] = await Promise.all([
+              cacheService.getCategories(account, 'live'),
+              cacheService.getStreams(account, 'live'),
+              cacheService.getCategories(account, 'vod'),
+              cacheService.getStreams(account, 'vod'),
+              cacheService.getCategories(account, 'series'),
+              cacheService.getStreams(account, 'series')
+          ]);
 
-          // Step 4: VOD Categories
-          setRevisionProgress({ step: 'Scanning Movies...', percent: 55, details: 'Fetching movie categories' });
-          const vodCats = await fetchCached(buildApiUrl('get_vod_categories'));
-          results.vod.categories = Array.isArray(vodCats) ? vodCats.length : 0;
-
-          // Step 5: VOD Streams
-          setRevisionProgress({ step: 'Scanning Movies...', percent: 70, details: 'Indexing movie library' });
-          const vodStreams = await fetchCached(buildApiUrl('get_vod_streams'));
-          results.vod.streams = Array.isArray(vodStreams) ? vodStreams.length : 0;
-
-          // Step 6: Series Categories
-          setRevisionProgress({ step: 'Checking Series...', percent: 85, details: 'Fetching series categories' });
-          const seriesCats = await fetchCached(buildApiUrl('get_series_categories'));
-          results.series.categories = Array.isArray(seriesCats) ? seriesCats.length : 0;
-
-          // Step 7: Series Streams
-          setRevisionProgress({ step: 'Checking Series...', percent: 95, details: 'Indexing series titles' });
-          const seriesStreams = await fetchCached(buildApiUrl('get_series'));
-          results.series.streams = Array.isArray(seriesStreams) ? seriesStreams.length : 0;
+          results.live.categories = liveCats.length;
+          results.live.streams = liveStreams.length;
+          results.vod.categories = vodCats.length;
+          results.vod.streams = vodStreams.length;
+          results.series.categories = seriesCats.length;
+          results.series.streams = seriesStreams.length;
 
           // Finalize
-          setRevisionProgress({ step: 'Complete', percent: 100, details: 'Analysis finished successfully.' });
+          setRevisionProgress({ step: 'Complete', percent: 100, details: 'Analysis and caching finished successfully.' });
           setRevisionResults(results);
 
       } catch (e: any) {
@@ -270,6 +264,15 @@ export const AccountDetailView: React.FC<{ account: XtreamAccount; onBack: () =>
         setSpeedMetrics(prev => ({ ...prev, status: 'error', error: e.message || "Connection failed during test." }));
     }
   };
+
+  const speedStatus = useMemo(() => {
+      const s = speedMetrics.downloadSpeed;
+      if (s === 0) return { label: 'MEASURING...', color: 'bg-white/5 text-win-subtext border-white/10' };
+      if (s < 5) return { label: 'READY FOR SD', color: 'bg-orange-500/10 text-orange-400 border-orange-500/20' };
+      if (s < 15) return { label: 'READY FOR HD', color: 'bg-blue-500/10 text-blue-400 border-blue-500/20' };
+      if (s < 30) return { label: 'READY FOR FULL HD', color: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' };
+      return { label: 'READY FOR 4K UHD', color: 'bg-green-500/10 text-green-400 border-green-500/20' };
+  }, [speedMetrics.downloadSpeed]);
 
   // --- RENDERERS ---
 
@@ -505,19 +508,25 @@ export const AccountDetailView: React.FC<{ account: XtreamAccount; onBack: () =>
          {/* Category Browsers */}
          {visitedTabs.has('live') && (
             <div className="w-full h-full" style={{ display: activeTab === 'live' ? 'block' : 'none' }}>
-                <CategoryBrowser account={account} type="live" fetchCached={fetchCached} />
+                <CategoryBrowser account={account} type="live" />
             </div>
          )}
 
          {visitedTabs.has('vod') && (
             <div className="w-full h-full" style={{ display: activeTab === 'vod' ? 'block' : 'none' }}>
-                <CategoryBrowser account={account} type="vod" fetchCached={fetchCached} />
+                <CategoryBrowser account={account} type="vod" />
             </div>
          )}
 
          {visitedTabs.has('series') && (
             <div className="w-full h-full" style={{ display: activeTab === 'series' ? 'block' : 'none' }}>
-                <CategoryBrowser account={account} type="series" fetchCached={fetchCached} />
+                <CategoryBrowser account={account} type="series" />
+            </div>
+         )}
+
+         {visitedTabs.has('downloads') && (
+            <div className="w-full h-full" style={{ display: activeTab === 'downloads' ? 'block' : 'none' }}>
+                <DownloadManager accountId={account.id} onClose={() => setActiveTab('info')} onPlay={onPlayDownload} />
             </div>
          )}
 
@@ -735,7 +744,9 @@ export const AccountDetailView: React.FC<{ account: XtreamAccount; onBack: () =>
                                         </div>
                                     ) : (
                                         <div className="mt-8 flex justify-center gap-2">
-                                             <div className="px-3 py-1 bg-green-500/10 text-green-400 text-xs font-bold rounded-full border border-green-500/20">READY FOR 4K UHD</div>
+                                             <div className={`px-3 py-1 ${speedStatus.color} text-xs font-bold rounded-full border`}>
+                                                 {speedStatus.label}
+                                             </div>
                                         </div>
                                     )}
                                 </div>

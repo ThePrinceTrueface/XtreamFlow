@@ -35,17 +35,29 @@ export interface AppBackup {
 
 // --- User Preferences (Local Storage) ---
 
+export type ReconnectDelay = 'progressive' | 2000 | 3000 | 5000;
+
+export interface PlayerSettings {
+  reconnectDelay: ReconnectDelay;
+}
+
 export interface StreamProgress {
   time: number;       // Current playback time in seconds
   duration: number;   // Total duration
   progress: number;   // 0.0 to 1.0
   lastWatched: number;// Unix timestamp
   finished: boolean;  // True if progress > 95%
+  item?: XtreamStream; // Metadata for offline display
 }
 
 export interface AccountPreferences {
-  favorites: string[]; // Array of stream_id or series_id
+  favoritesTable: {
+    live: XtreamStream[];
+    vod: XtreamStream[];
+    series: XtreamStream[];
+  };
   history: Record<string, StreamProgress>; // Key is stream_id/episode_id
+  playerSettings?: PlayerSettings;
 }
 
 export interface GlobalPreferences {
@@ -171,7 +183,7 @@ export interface SearchCriteria {
   tags: string[];
 }
 
-export type ViewState = 'dashboard' | 'add-account' | 'edit-account' | 'settings' | 'manage-accounts' | 'account-detail' | 'server-library';
+export type ViewState = 'dashboard' | 'add-account' | 'edit-account' | 'settings' | 'manage-accounts' | 'account-detail' | 'server-library' | 'downloads';
 
 export interface ValidationResult {
   isValid: boolean;
@@ -208,4 +220,25 @@ export interface XtreamEPGProgram {
 
 export interface XtreamEPGResponse {
   epg_listings: XtreamEPGProgram[];
+}
+
+// --- Download Types ---
+
+export type DownloadStatus = 'queued' | 'downloading' | 'paused' | 'completed' | 'error';
+
+export interface DownloadItem {
+  id: string; // stream_id or episode_id
+  name: string;
+  url: string;
+  progress: number; // 0 to 100
+  status: DownloadStatus;
+  addedAt: number;
+  completedAt?: number;
+  totalSize?: number;
+  downloadedSize?: number;
+  error?: string;
+  fileHandle?: FileSystemFileHandle; // For File System Access API
+  fileName: string;
+  type: 'movie' | 'episode';
+  accountId: string;
 }

@@ -3,11 +3,11 @@ import React, { useEffect, useRef, useState } from 'react';
 import { 
   Play, Pause, Volume2, VolumeX, Maximize, Minimize, X, 
   SkipBack, SkipForward, Settings, List, ChevronLeft, ChevronRight, Square,
-  Expand, Shrink, RefreshCw, Clock, Info
+  Expand, Shrink, RefreshCw, Clock, Info, Columns
 } from 'lucide-react';
 import Hls from 'hls.js';
 import { XtreamStream, XtreamAccount } from '../types';
-import { createProxyUrl } from '../utils';
+import { createProxyUrl, decodeBase64 } from '../utils';
 import { useUserPreferences } from '../hooks/useUserPreferences';
 
 interface VideoPlayerProps {
@@ -22,6 +22,8 @@ interface VideoPlayerProps {
   isMini?: boolean;
   onToggleEmbed?: () => void;
   onMaximize?: () => void;
+  onFullWindow?: () => void;
+  onRestore?: () => void;
   account?: XtreamAccount;
 }
 
@@ -32,34 +34,9 @@ interface EpgItem {
   description: string;
 }
 
-// Helper to decode Base64 strings safely and fix encoding issues
-const decodeBase64 = (str: string) => {
-    if (!str) return "";
-    let decoded = str;
-
-    // 1. Try Base64 decoding if it looks like Base64 (no spaces, valid chars)
-    if (!str.includes(' ') && /^([A-Za-z0-9+/]{4})*([A-Za-z0-9+/]{3}=|[A-Za-z0-9+/]{2}==)?$/.test(str)) {
-         try {
-             const raw = window.atob(str);
-             if (!/[\x00-\x08\x0B\x0C\x0E-\x1F]/.test(raw)) {
-                 decoded = raw;
-             }
-         } catch (e) {
-             // Not base64
-         }
-    }
-
-    // 2. Fix UTF-8 interpreted as Latin-1 (Mojibake)
-    try {
-        return decodeURIComponent(escape(decoded));
-    } catch (e) {
-        return decoded;
-    }
-};
-
 export const VideoPlayer: React.FC<VideoPlayerProps> = ({ 
     url, title, type, onClose, playlist, currentItem, onChannelSelect,
-    isEmbedded = false, isMini = false, onToggleEmbed, onMaximize, account
+    isEmbedded = false, isMini = false, onToggleEmbed, onMaximize, onFullWindow, onRestore, account
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -68,7 +45,8 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const epgIntervalRef = useRef<number | null>(null);
   
   // Hook for Preferences
-  const { updateProgress, getProgress } = useUserPreferences(account?.id || 'guest');
+  const { updateProgress, getProgress, getPlayerSettings, updatePlayerSettings } = useUserPreferences(account?.id || 'guest');
+  const playerSettings = getPlayerSettings();
   const saveIntervalRef = useRef<number | null>(null);
 
   // Player State
@@ -80,6 +58,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showControls, setShowControls] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   
   // Resume State
   const [resumePoint, setResumePoint] = useState<number | null>(null);
@@ -221,8 +200,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
     saveIntervalRef.current = window.setInterval(() => {
         if (videoRef.current && !videoRef.current.paused && videoRef.current.currentTime > 0) {
-            const id = currentItem.stream_id || currentItem.series_id || currentItem.num;
-            updateProgress(id, videoRef.current.currentTime, videoRef.current.duration);
+            updateProgress(currentItem, videoRef.current.currentTime, videoRef.current.duration);
         }
     }, 10000); // Save every 10 seconds
 
@@ -262,6 +240,13 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         }
     };
 
+    const getRetryDelay = () => {
+        if (playerSettings.reconnectDelay === 'progressive') {
+            return Math.min(1000 * Math.pow(2, retryCount), 10000);
+        }
+        return playerSettings.reconnectDelay;
+    };
+
     if (isHls && Hls.isSupported()) {
       hls = new Hls({
         enableWorker: true,
@@ -296,9 +281,10 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                     setIsLoading(true);
                     setIsRetrying(true);
                     if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
+                    const delay = getRetryDelay();
                     retryTimeoutRef.current = window.setTimeout(() => {
                         setRetryCount(prev => prev + 1);
-                    }, 5000);
+                    }, delay);
                     break;
             }
         }
@@ -313,9 +299,10 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
           setIsLoading(true);
           setIsRetrying(true);
           if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
+          const delay = getRetryDelay();
           retryTimeoutRef.current = window.setTimeout(() => {
                setRetryCount(prev => prev + 1);
-          }, 5000);
+          }, delay);
       };
     }
 
@@ -338,8 +325,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     return () => {
       // Save progress one last time on unmount
       if (video && type !== 'live' && currentItem) {
-          const id = currentItem.stream_id || currentItem.series_id || currentItem.num;
-          updateProgress(id, video.currentTime, video.duration);
+          updateProgress(currentItem, video.currentTime, video.duration);
       }
 
       if (hls) hls.destroy();
@@ -500,9 +486,14 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
             <div className="absolute inset-0 flex flex-col items-center justify-center z-10 pointer-events-none bg-black/40 backdrop-blur-sm">
                 <div className="w-16 h-16 border-4 border-fluent-accent border-t-transparent rounded-full animate-spin mb-4"></div>
                 {isRetrying && (
-                    <div className="text-white text-sm font-medium animate-pulse flex items-center gap-2">
-                        <RefreshCw size={14} className="animate-spin" />
-                        Connexion perdue. Reconnexion dans 5s...
+                    <div className="text-white text-sm font-medium animate-pulse flex flex-col items-center gap-2">
+                        <div className="flex items-center gap-2">
+                            <RefreshCw size={14} className="animate-spin" />
+                            Connexion perdue.
+                        </div>
+                        <div className="text-[10px] opacity-70 uppercase tracking-widest">
+                            Reconnexion {playerSettings.reconnectDelay === 'progressive' ? 'progressive' : `dans ${playerSettings.reconnectDelay / 1000}s`}...
+                        </div>
                     </div>
                 )}
             </div>
@@ -775,9 +766,47 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                     )}
 
                     {!isMini && (
-                        <button className="text-white/70 hover:text-white" title="Paramètres">
-                            <Settings size={20} />
-                        </button>
+                        <div className="relative">
+                            <button 
+                                onClick={() => setIsSettingsOpen(!isSettingsOpen)} 
+                                className={`transition-colors ${isSettingsOpen ? 'text-fluent-accent' : 'text-white/70 hover:text-white'}`} 
+                                title="Paramètres"
+                            >
+                                <Settings size={20} />
+                            </button>
+
+                            {isSettingsOpen && (
+                                <div className="absolute bottom-full right-0 mb-4 w-64 bg-[#1e1e1e] border border-white/10 rounded-xl shadow-2xl p-4 z-50 animate-in slide-in-from-bottom-2">
+                                    <h4 className="text-xs font-bold text-white/50 uppercase tracking-widest mb-3">Reconnexion auto</h4>
+                                    <div className="space-y-1">
+                                        {[
+                                            { label: 'Progressive', value: 'progressive' },
+                                            { label: '2 secondes', value: 2000 },
+                                            { label: '3 secondes', value: 3000 },
+                                            { label: '5 secondes', value: 5000 }
+                                        ].map((opt) => (
+                                            <button
+                                                key={opt.label}
+                                                onClick={() => {
+                                                    updatePlayerSettings({ reconnectDelay: opt.value as any });
+                                                    setIsSettingsOpen(false);
+                                                }}
+                                                className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors flex items-center justify-between
+                                                    ${playerSettings.reconnectDelay === opt.value 
+                                                        ? 'bg-fluent-accent text-black font-bold' 
+                                                        : 'text-white/80 hover:bg-white/5'}`}
+                                            >
+                                                {opt.label}
+                                                {playerSettings.reconnectDelay === opt.value && <div className="w-1.5 h-1.5 rounded-full bg-black" />}
+                                            </button>
+                                        ))}
+                                    </div>
+                                    <div className="mt-4 pt-3 border-t border-white/5 text-[10px] text-white/40 leading-tight">
+                                        Définit le délai avant de tenter une reconnexion en cas de perte de signal.
+                                    </div>
+                                </div>
+                            )}
+                        </div>
                     )}
                     
                     {isMini && onToggleEmbed && (
@@ -786,15 +815,21 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                         </button>
                     )}
 
-                    {isMini && onMaximize && (
-                         <button onClick={onMaximize} className="text-white/70 hover:text-white p-1 hover:bg-white/10 rounded" title="Élargir dans toute la vue">
-                            <Maximize size={16} />
+                    {(isMini || isEmbedded) && onFullWindow && (
+                         <button onClick={onFullWindow} className="text-white/70 hover:text-white p-1 hover:bg-white/10 rounded" title="Plein écran (Fenêtre)">
+                            <Maximize size={isMini ? 16 : 20} />
+                        </button>
+                    )}
+
+                    {onRestore && (
+                         <button onClick={onRestore} className="text-white/70 hover:text-white p-1 hover:bg-white/10 rounded" title="Retour à la vue section">
+                            <Columns size={isMini ? 16 : 20} />
                         </button>
                     )}
                     
                     {!isMini && onToggleEmbed && (
-                         <button onClick={onToggleEmbed} className="text-white/70 hover:text-white" title={isEmbedded ? "Agrandir" : "Réduire"}>
-                            {isEmbedded ? <Expand size={20} /> : <Shrink size={20} />}
+                         <button onClick={onToggleEmbed} className="text-white/70 hover:text-white" title={isEmbedded ? (onFullWindow ? "Réduire dans l'EPG" : "Plein écran (Fenêtre)") : "Réduire"}>
+                            {isEmbedded ? (onFullWindow ? <Shrink size={20} /> : <Expand size={20} />) : <Shrink size={20} />}
                         </button>
                     )}
 

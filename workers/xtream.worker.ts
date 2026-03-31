@@ -32,6 +32,24 @@ self.onmessage = async (e) => {
         self.postMessage({ type: 'SUCCESS', id, data: { full: cachedData, grouped } });
         break;
 
+      case 'GROUP_DATA':
+        // Payload: { data: any[], limit: number }
+        cachedData = Array.isArray(payload.data) ? payload.data : [];
+        const groupedData = {};
+        const limitGroup = payload.limit || 15;
+
+        cachedData.forEach((item) => {
+            const catId = item.category_id;
+            if (!catId) return;
+            if (!groupedData[catId]) groupedData[catId] = [];
+            if (groupedData[catId].length < limitGroup) {
+                groupedData[catId].push(item);
+            }
+        });
+
+        self.postMessage({ type: 'SUCCESS', id, data: { full: cachedData, grouped: groupedData } });
+        break;
+
       case 'FILTER':
         const q = payload.query.toLowerCase();
         const filtered = cachedData.filter((item) => {

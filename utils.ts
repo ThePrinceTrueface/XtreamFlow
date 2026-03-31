@@ -1,6 +1,32 @@
 
 import { XtreamAccount } from './types';
 
+// Helper to decode Base64 strings safely and fix encoding issues (Mojibake)
+export const decodeBase64 = (str: string) => {
+    if (!str) return "";
+    let decoded = str;
+
+    // 1. Try Base64 decoding if it looks like Base64 (no spaces, valid chars)
+    if (!str.includes(' ') && /^([A-Za-z0-9+/]{4})*([A-Za-z0-9+/]{3}=|[A-Za-z0-9+/]{2}==)?$/.test(str)) {
+         try {
+             const raw = window.atob(str);
+             // Real UTF-8 text shouldn't have many control chars (0-31), except \t, \n, \r.
+             if (!/[\x00-\x08\x0B\x0C\x0E-\x1F]/.test(raw)) {
+                 decoded = raw;
+             }
+         } catch (e) {
+             // Not base64
+         }
+    }
+
+    // 2. Fix UTF-8 interpreted as Latin-1 (Mojibake)
+    try {
+        return decodeURIComponent(escape(decoded));
+    } catch (e) {
+        return decoded;
+    }
+};
+
 export const generateId = () => Math.random().toString(36).substr(2, 9);
 
 export const createProxyUrl = (targetUrl: string) => {
