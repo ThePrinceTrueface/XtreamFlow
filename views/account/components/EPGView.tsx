@@ -118,6 +118,7 @@ interface EPGViewProps {
   channels: XtreamStream[];
   account: XtreamAccount;
   onChannelClick: (channel: XtreamStream) => void;
+  preselectedChannelId?: string;
 }
 
 const HOUR_WIDTH = 300; // Pixels per hour
@@ -126,7 +127,7 @@ const ROW_HEIGHT = 60;
 const SIDEBAR_WIDTH = 220;
 const BATCH_SIZE = 10; // Fetch EPG for 10 channels at a time
 
-export const EPGView: React.FC<EPGViewProps> = ({ channels, account, onChannelClick }) => {
+export const EPGView: React.FC<EPGViewProps> = ({ channels, account, onChannelClick, preselectedChannelId }) => {
   const [epgData, setEpgData] = useState<Record<string, XtreamEPGProgram[]>>({});
   const [loading, setLoading] = useState<Record<string, boolean>>({});
   const [currentTime, setCurrentTime] = useState(Date.now());
@@ -163,6 +164,19 @@ export const EPGView: React.FC<EPGViewProps> = ({ channels, account, onChannelCl
       headerScrollRef.current.scrollLeft = nowOffset - (window.innerWidth / 2) + SIDEBAR_WIDTH;
     }
   }, [startTime]);
+
+  // Scroll to preselected channel
+  useEffect(() => {
+    if (preselectedChannelId && channels.length > 0 && gridListRef.current) {
+        const index = channels.findIndex(c => c.stream_id?.toString() === preselectedChannelId);
+        if (index !== -1) {
+            gridListRef.current.scrollTo(index * ROW_HEIGHT);
+            if (sidebarListRef.current) {
+                sidebarListRef.current.scrollTo(index * ROW_HEIGHT);
+            }
+        }
+    }
+  }, [preselectedChannelId, channels]);
 
   const epgDataRef = useRef<Record<string, XtreamEPGProgram[]>>({});
   const loadingRef = useRef<Record<string, boolean>>({});

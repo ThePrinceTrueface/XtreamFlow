@@ -62,6 +62,11 @@ export default function App() {
   const [editingAccount, setEditingAccount] = useState<XtreamAccount | null>(null);
   const [selectedAccount, setSelectedAccount] = useState<XtreamAccount | null>(null);
   const [accountInitialTab, setAccountInitialTab] = useState<string>('info');
+  const [preselectedChannelId, setPreselectedChannelId] = useState<string | undefined>(undefined);
+  const [preselectedItemId, setPreselectedItemId] = useState<string | undefined>(undefined);
+  const [preselectedItemType, setPreselectedItemType] = useState<string | undefined>(undefined);
+  const [preselectedEpisodeId, setPreselectedEpisodeId] = useState<string | undefined>(undefined);
+  const [preselectedSeason, setPreselectedSeason] = useState<string | undefined>(undefined);
   
   // Cross-View State passing
   const [serverToPrefill, setServerToPrefill] = useState<SavedServer | null>(null);
@@ -109,35 +114,19 @@ export default function App() {
       let title = stream.name;
       let type: 'live' | 'vod' | 'series' = stream.type;
 
-      if (stream.type === 'live') {
-        url = `${baseUrl}/live/${account.username}/${account.password}/${stream.stream_id}.m3u8`;
-      } else if (stream.type === 'movie') {
-        const ext = stream.container_extension || 'mp4';
-        url = `${baseUrl}/movie/${account.username}/${account.password}/${stream.stream_id}.${ext}`;
-        type = 'vod';
-      } else if (stream.type === 'series') {
-        // For series, we can't play it directly without knowing the episode.
-        // We navigate to the account detail view, series tab, and maybe we can't deep link easily.
-        // Let's just navigate to the account and series tab for now.
-        setAccountInitialTab('series');
-        setSelectedAccount(account);
-        setActiveView('account-detail');
-        // Ideally we'd open the series detail, but we don't have that state lifted up.
-        setToast({ message: `Série sélectionnée: ${stream.name}. Veuillez la chercher dans l'onglet Séries.`, show: true });
-        setTimeout(() => setToast({ message: '', show: false }), 4000);
-        return;
-      }
-
-      // Use the proxy utility if needed, but we don't have it imported here directly.
-      // Actually, we can just use the direct URL or import createProxyUrl.
-      // Let's import createProxyUrl from utils.
-      
-      setPlayingDownload({ url: createProxyUrl(url), title, type });
+      setSelectedAccount(account);
+      setActiveView('account-detail');
+      setAccountInitialTab(stream.type === 'live' ? 'live' : stream.type === 'movie' ? 'vod' : 'series');
+      setPreselectedItemId(stream.stream_id || stream.series_id);
+      setPreselectedItemType(stream.type);
+      setPreselectedEpisodeId(stream.episode_num?.toString());
+      setPreselectedSeason(stream.season?.toString());
     } else if (result.type === 'epg') {
       const prog = result.data;
       const account = await db.accounts.get(prog.accountId);
       if (account) {
         setAccountInitialTab('live');
+        setPreselectedChannelId(prog.stream_id);
         setSelectedAccount(account);
         setActiveView('account-detail');
         setToast({ message: `Programme: ${prog.title}. Allez dans l'onglet Live pour le voir.`, show: true });
@@ -458,6 +447,11 @@ export default function App() {
               onPlayDownload={(url, title, type) => setPlayingDownload({ url, title, type })}
               onOpenSearch={() => setIsGlobalSearchOpen(true)}
               initialTab={accountInitialTab}
+              preselectedChannelId={preselectedChannelId}
+              preselectedItemId={preselectedItemId}
+              preselectedItemType={preselectedItemType}
+              preselectedEpisodeId={preselectedEpisodeId}
+              preselectedSeason={preselectedSeason}
            />
         ) : (
           <>

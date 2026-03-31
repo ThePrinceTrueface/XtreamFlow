@@ -110,6 +110,8 @@ export interface XtreamStream {
   stream_type?: string;
   stream_id?: number; // Present in Live/VOD
   series_id?: number; // Present in Series
+  season?: number;
+  episode_num?: number;
   stream_icon?: string; // Live/VOD
   cover?: string; // Series
   rating?: string;

@@ -28,7 +28,7 @@ interface SpeedTestMetrics {
     error?: string;
 }
 
-export const AccountDetailView: React.FC<{ account: XtreamAccount; onBack: () => void; onPlayDownload?: (url: string, title: string, type: 'vod' | 'series') => void; onOpenSearch?: () => void; initialTab?: string }> = ({ account, onBack, onPlayDownload, onOpenSearch, initialTab }) => {
+export const AccountDetailView: React.FC<{ account: XtreamAccount; onBack: () => void; onPlayDownload?: (url: string, title: string, type: 'vod' | 'series') => void; onOpenSearch?: () => void; initialTab?: string; preselectedChannelId?: string; preselectedItemId?: string; preselectedItemType?: string; preselectedEpisodeId?: string; preselectedSeason?: string }> = ({ account, onBack, onPlayDownload, onOpenSearch, initialTab, preselectedChannelId, preselectedItemId, preselectedItemType, preselectedEpisodeId, preselectedSeason }) => {
   const [activeTab, setActiveTab] = useState(initialTab || 'info');
   const [visitedTabs, setVisitedTabs] = useState<Set<string>>(new Set([initialTab || 'info']));
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -515,19 +515,19 @@ export const AccountDetailView: React.FC<{ account: XtreamAccount; onBack: () =>
          {/* Category Browsers */}
          {visitedTabs.has('live') && (
             <div className="w-full h-full" style={{ display: activeTab === 'live' ? 'block' : 'none' }}>
-                <CategoryBrowser account={account} type="live" />
+                <CategoryBrowser account={account} type="live" preselectedChannelId={preselectedChannelId} preselectedItemId={preselectedItemId} preselectedItemType={preselectedItemType} />
             </div>
          )}
 
          {visitedTabs.has('vod') && (
             <div className="w-full h-full" style={{ display: activeTab === 'vod' ? 'block' : 'none' }}>
-                <CategoryBrowser account={account} type="vod" />
+                <CategoryBrowser account={account} type="vod" preselectedItemId={preselectedItemId} preselectedItemType={preselectedItemType} preselectedEpisodeId={preselectedEpisodeId} preselectedSeason={preselectedSeason} />
             </div>
          )}
 
          {visitedTabs.has('series') && (
             <div className="w-full h-full" style={{ display: activeTab === 'series' ? 'block' : 'none' }}>
-                <CategoryBrowser account={account} type="series" />
+                <CategoryBrowser account={account} type="series" preselectedItemId={preselectedItemId} preselectedItemType={preselectedItemType} preselectedEpisodeId={preselectedEpisodeId} preselectedSeason={preselectedSeason} />
             </div>
          )}
 

@@ -20,9 +20,11 @@ interface ItemDetailViewProps {
   account: XtreamAccount;
   siblingItems?: XtreamStream[];
   onSwitchItem?: (item: XtreamStream) => void;
+  preselectedEpisodeId?: string | number;
+  preselectedSeason?: string | number;
 }
 
-export const ItemDetailView: React.FC<ItemDetailViewProps> = ({ item, detail, loading, type, onBack, onClose, onPlay, onPlayEpisode, account, siblingItems = [], onSwitchItem }) => {
+export const ItemDetailView: React.FC<ItemDetailViewProps> = ({ item, detail, loading, type, onBack, onClose, onPlay, onPlayEpisode, account, siblingItems = [], onSwitchItem, preselectedEpisodeId, preselectedSeason }) => {
     const [showTrailer, setShowTrailer] = useState(false);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     const mainScrollRef = useRef<HTMLDivElement>(null);
@@ -53,9 +55,23 @@ export const ItemDetailView: React.FC<ItemDetailViewProps> = ({ item, detail, lo
         // Reset season selection
         if (type === 'series' && detail?.episodes) {
             const seasons = Object.keys(detail.episodes).sort((a,b) => parseInt(a) - parseInt(b));
-            if (seasons.length > 0) setSelectedSeason(seasons[0]);
+            if (preselectedSeason) {
+                setSelectedSeason(preselectedSeason.toString());
+            } else if (seasons.length > 0) {
+                setSelectedSeason(seasons[0]);
+            }
         }
-    }, [item.stream_id, item.series_id, detail]);
+    }, [item.stream_id, item.series_id, detail, preselectedSeason]);
+
+    // Scroll to episode
+    useEffect(() => {
+        if (preselectedEpisodeId && type === 'series') {
+            const epElement = document.getElementById(`episode-${preselectedEpisodeId}`);
+            if (epElement) {
+                epElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }
+    }, [preselectedEpisodeId, selectedSeason, detail]);
 
     const backdrop = detail?.info?.backdrop_path?.[0] || item?.stream_icon || item?.cover;
     const poster = item?.stream_icon || item?.cover;
@@ -450,6 +466,7 @@ export const ItemDetailView: React.FC<ItemDetailViewProps> = ({ item, detail, lo
                                 return (
                                     <div 
                                         key={ep.id} 
+                                        id={`episode-${ep.id}`}
                                         className="group flex flex-col md:flex-row gap-4 p-4 rounded-xl bg-white/5 border border-white/5 hover:bg-white/10 transition-all cursor-pointer hover:shadow-lg hover:border-white/10 relative"
                                         onClick={() => onPlayEpisode && onPlayEpisode({ ...ep, season: selectedSeason })}
                                     >

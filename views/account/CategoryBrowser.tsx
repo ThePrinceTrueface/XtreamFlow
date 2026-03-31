@@ -24,9 +24,25 @@ const FAVORITES_CATEGORY: XtreamCategory = { category_id: 'favorites', category_
 interface CategoryBrowserProps {
     account: XtreamAccount;
     type: 'live' | 'vod' | 'series';
+    preselectedChannelId?: string;
+    preselectedItemId?: string;
+    preselectedItemType?: string;
+    preselectedEpisodeId?: string;
+    preselectedSeason?: string;
 }
 
-export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type }) => {
+export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type, preselectedChannelId, preselectedItemId, preselectedItemType, preselectedEpisodeId, preselectedSeason }) => {
+  // ...
+  
+  // Handle preselected item
+  useEffect(() => {
+    if (preselectedItemId && preselectedItemType === type && fullData.length > 0) {
+        const item = fullData.find(i => (i.stream_id?.toString() === preselectedItemId || i.series_id?.toString() === preselectedItemId));
+        if (item) {
+            handleDetail(item);
+        }
+    }
+  }, [preselectedItemId, preselectedItemType, type, fullData, handleDetail]);
   // Navigation & UI State
   const [uiMode, setUiMode] = useState<'normal' | 'flow'>(() => (localStorage.getItem('category_ui_mode') as 'normal' | 'flow') || 'normal');
   const [viewMode, setViewMode] = useState<'grid' | 'epg'>('grid'); // New state for EPG toggle
@@ -758,7 +774,8 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type 
                                                 <EPGView 
                                                     channels={itemsToDisplay} 
                                                     account={account} 
-                                                    onChannelClick={handlePlay} 
+                                                    onChannelClick={handlePlay}
+                                                    preselectedChannelId={preselectedChannelId}
                                                 />
                                             </div>
                                         </motion.div>
