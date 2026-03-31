@@ -1,16 +1,27 @@
 
 import React, { useRef, useState, useEffect } from 'react';
-import { Database, Download, Upload, Settings as SettingsIcon, Loader2 } from 'lucide-react';
+import { Database, Download, Upload, Settings as SettingsIcon, Loader2, Palette } from 'lucide-react';
 import { XtreamAccount } from '../types';
 import { Card, Button } from '../components/Win11UI';
 import { createInlineWorker } from '../utils';
 import { FILE_WORKER_CODE } from '../workers/file.worker';
 
+const ACCENT_COLORS = [
+  { name: 'Pink', value: '#FF0080' },
+  { name: 'Blue', value: '#0078D4' },
+  { name: 'Purple', value: '#881798' },
+  { name: 'Green', value: '#107C10' },
+  { name: 'Red', value: '#E81123' },
+  { name: 'Orange', value: '#D83B01' },
+];
+
 export const SettingsView: React.FC<{ 
   accounts: XtreamAccount[]; 
   onImport: (data: any) => void; 
   onExport: () => void;
-}> = ({ accounts, onImport, onExport }) => {
+  accentColor: string;
+  onAccentColorChange: (color: string) => void;
+}> = ({ accounts, onImport, onExport, accentColor, onAccentColorChange }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const workerRef = useRef<Worker | null>(null);
@@ -77,6 +88,32 @@ export const SettingsView: React.FC<{
     <div className="max-w-4xl mx-auto animate-in fade-in">
       <h2 className="text-2xl font-semibold mb-6">Settings</h2>
       <div className="space-y-6">
+        <Card>
+          <div className="flex items-start gap-4">
+             <div className="p-3 bg-pink-500/10 rounded-lg text-pink-400" style={{ color: accentColor, backgroundColor: accentColor + '1A' }}>
+                <Palette size={24} />
+             </div>
+             <div className="flex-1">
+                <h3 className="text-lg font-medium mb-1">Appearance</h3>
+                <p className="text-fluent-subtext text-sm mb-4">
+                  Choose your application accent color.
+                </p>
+                <div className="flex flex-wrap gap-3">
+                  {ACCENT_COLORS.map((color) => (
+                    <button
+                      key={color.value}
+                      onClick={() => onAccentColorChange(color.value)}
+                      className={`w-10 h-10 rounded-full border-2 transition-all ${
+                        accentColor === color.value ? 'border-white scale-110 shadow-lg' : 'border-transparent opacity-60 hover:opacity-100'
+                      }`}
+                      style={{ backgroundColor: color.value }}
+                      title={color.name}
+                    />
+                  ))}
+                </div>
+             </div>
+          </div>
+        </Card>
         <Card>
           <div className="flex items-start gap-4">
              <div className="p-3 bg-blue-500/10 rounded-lg text-blue-400">

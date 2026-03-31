@@ -64,6 +64,17 @@ export default function App() {
   // Cross-View State passing
   const [serverToPrefill, setServerToPrefill] = useState<SavedServer | null>(null);
   const [initialSearchQuery, setInitialSearchQuery] = useState<string>('');
+  const [accentColor, setAccentColor] = useState(() => {
+    return localStorage.getItem('xtream_accent_color') || '#FF0080';
+  });
+
+  useEffect(() => {
+    const root = document.documentElement;
+    root.style.setProperty('--fluent-accent', accentColor);
+    // Simple hover color calculation (adding transparency)
+    root.style.setProperty('--fluent-accent-hover', accentColor + 'CC');
+    localStorage.setItem('xtream_accent_color', accentColor);
+  }, [accentColor]);
   
   // Modal State
   const [modal, setModal] = useState<ModalConfig>({
@@ -436,6 +447,8 @@ export default function App() {
                     accounts={accounts} 
                     onImport={handleImportData} 
                     onExport={handleExportData}
+                    accentColor={accentColor}
+                    onAccentColorChange={setAccentColor}
                 />
               )}
 

@@ -8,6 +8,11 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Segoe+UI:wght@300;400;600;700&display=swap" rel="stylesheet">
     <style>
+      :root {
+        --fluent-accent: #FF0080;
+        --fluent-accent-hover: #FF1A8C;
+      }
+
       @font-face {
         font-family: 'Segoe UI Variable';
         src: local('Segoe UI Variable'), local('Segoe UI');
@@ -65,14 +70,14 @@
                 borderActive: 'rgba(255, 255, 255, 0.1)',
                 text: '#ffffff',
                 subtext: 'rgba(255, 255, 255, 0.7)',
-                accent: '#FF0080', // Vibrant Pink from logo
-                accentHover: '#FF1A8C',
+                accent: 'var(--fluent-accent)',
+                accentHover: 'var(--fluent-accent-hover)',
                 orange: '#FF8C00',
                 yellow: '#FFD700',
                 danger: '#FF4D4F',
               },
               win: {
-                primary: '#FF0080',
+                primary: 'var(--fluent-accent)',
                 subtext: 'rgba(255, 255, 255, 0.6)',
                 card: 'rgba(255, 255, 255, 0.04)',
                 cardHover: 'rgba(255, 255, 255, 0.08)',
