@@ -396,7 +396,7 @@ export default function App() {
               onToggle={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
             />
             
-            <main className="flex-1 overflow-y-auto p-6 md:p-8 relative scroll-smooth bg-transparent transition-all duration-300">
+            <main className={`flex-1 overflow-y-auto relative scroll-smooth bg-transparent transition-all duration-300 ${activeView === 'downloads' ? 'p-0' : 'p-6 md:p-8'}`}>
               {activeView === 'dashboard' && <Dashboard accounts={accounts} setView={handleSetView} />}
               
               {activeView === 'add-account' && (

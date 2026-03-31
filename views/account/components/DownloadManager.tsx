@@ -37,9 +37,9 @@ export const DownloadManager = ({ onClose, onPlay, accountId }: { onClose?: () =
   };
 
   return (
-    <div className="max-w-4xl mx-auto animate-in fade-in h-full flex flex-col">
+    <div className="animate-in fade-in h-full flex flex-col w-full">
       <div 
-        className="bg-[#1a1a1a] border border-white/10 rounded-2xl w-full flex-1 flex flex-col overflow-hidden shadow-2xl"
+        className="w-full flex-1 flex flex-col overflow-hidden"
       >
         <div className="p-6 border-b border-white/5 flex items-center justify-between bg-gradient-to-r from-fluent-accent/10 to-transparent">
           <div className="flex items-center gap-3">
