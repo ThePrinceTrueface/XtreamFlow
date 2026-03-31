@@ -69,10 +69,22 @@ export class DownloadService {
       const file = await item.fileHandle.getFile();
       const startByte = file.size;
 
-      const response = await fetch(item.url, {
-        signal: controller.signal,
-        headers: startByte > 0 ? { 'Range': `bytes=${startByte}-` } : {},
-      });
+      const secureUrl = item.url.replace(/^http:\/\//i, 'https://');
+      let response;
+      try {
+        response = await fetch(secureUrl, {
+          signal: controller.signal,
+          headers: startByte > 0 ? { 'Range': `bytes=${startByte}-` } : {},
+        });
+      } catch (e) {
+        console.warn('Direct HTTPS fetch failed, falling back to proxy...', e);
+        const { createProxyUrl } = await import('../../utils');
+        const proxyUrl = createProxyUrl(item.url);
+        response = await fetch(proxyUrl, {
+          signal: controller.signal,
+          headers: startByte > 0 ? { 'Range': `bytes=${startByte}-` } : {},
+        });
+      }
 
       if (!response.ok && response.status !== 206) {
         throw new Error(`Server returned ${response.status}: ${response.statusText}`);

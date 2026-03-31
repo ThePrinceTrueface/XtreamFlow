@@ -5,7 +5,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from './db';
 import { XtreamAccount, ViewState, ModalConfig, ModalType, SavedServer, AppBackup } from './types';
 import { AcrylicPanel, Modal } from './components/Win11UI';
-import { generateId } from './utils';
+import { generateId, createProxyUrl } from './utils';
 
 // Views & Components
 import { Sidebar } from './components/Sidebars';
@@ -17,6 +17,7 @@ import { AccountDetailView } from './views/account/AccountDetailView';
 import { ServerLibrary } from './views/ServerLibrary';
 import { DownloadManager } from './views/account/components/DownloadManager';
 import { VideoPlayer } from './components/VideoPlayer';
+import { GlobalSearch } from './components/GlobalSearch';
 
 // --- Custom Title Bar Component ---
 const TitleBar: React.FC = () => {
@@ -51,7 +52,7 @@ const TitleBar: React.FC = () => {
 export default function App() {
   const [activeView, setActiveView] = useState<ViewState>('dashboard');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  const [playingDownload, setPlayingDownload] = useState<{ url: string, title: string, type: 'vod' | 'series' } | null>(null);
+  const [playingDownload, setPlayingDownload] = useState<{ url: string, title: string, type: 'live' | 'vod' | 'series' } | null>(null);
   
   // Data State (Dexie)
   const accounts = useLiveQuery(() => db.accounts.toArray()) || [];
@@ -60,6 +61,7 @@ export default function App() {
   // View/Selection State
   const [editingAccount, setEditingAccount] = useState<XtreamAccount | null>(null);
   const [selectedAccount, setSelectedAccount] = useState<XtreamAccount | null>(null);
+  const [accountInitialTab, setAccountInitialTab] = useState<string>('info');
   
   // Cross-View State passing
   const [serverToPrefill, setServerToPrefill] = useState<SavedServer | null>(null);
@@ -86,6 +88,74 @@ export default function App() {
 
   // Toast State
   const [toast, setToast] = useState<{ message: string; show: boolean }>({ message: '', show: false });
+
+  // Global Search State
+  const [isGlobalSearchOpen, setIsGlobalSearchOpen] = useState(false);
+
+  const handleGlobalSearchResult = async (result: any) => {
+    setIsGlobalSearchOpen(false);
+    
+    if (result.type === 'stream') {
+      const stream = result.data;
+      const account = await db.accounts.get(stream.accountId);
+      if (!account) {
+        setToast({ message: 'Compte introuvable pour ce flux', show: true });
+        setTimeout(() => setToast({ message: '', show: false }), 3000);
+        return;
+      }
+
+      const baseUrl = `${account.protocol}://${account.host}:${account.port}`;
+      let url = '';
+      let title = stream.name;
+      let type: 'live' | 'vod' | 'series' = stream.type;
+
+      if (stream.type === 'live') {
+        url = `${baseUrl}/live/${account.username}/${account.password}/${stream.stream_id}.m3u8`;
+      } else if (stream.type === 'movie') {
+        const ext = stream.container_extension || 'mp4';
+        url = `${baseUrl}/movie/${account.username}/${account.password}/${stream.stream_id}.${ext}`;
+        type = 'vod';
+      } else if (stream.type === 'series') {
+        // For series, we can't play it directly without knowing the episode.
+        // We navigate to the account detail view, series tab, and maybe we can't deep link easily.
+        // Let's just navigate to the account and series tab for now.
+        setAccountInitialTab('series');
+        setSelectedAccount(account);
+        setActiveView('account-detail');
+        // Ideally we'd open the series detail, but we don't have that state lifted up.
+        setToast({ message: `Série sélectionnée: ${stream.name}. Veuillez la chercher dans l'onglet Séries.`, show: true });
+        setTimeout(() => setToast({ message: '', show: false }), 4000);
+        return;
+      }
+
+      // Use the proxy utility if needed, but we don't have it imported here directly.
+      // Actually, we can just use the direct URL or import createProxyUrl.
+      // Let's import createProxyUrl from utils.
+      
+      setPlayingDownload({ url: createProxyUrl(url), title, type });
+    } else if (result.type === 'epg') {
+      const prog = result.data;
+      const account = await db.accounts.get(prog.accountId);
+      if (account) {
+        setAccountInitialTab('live');
+        setSelectedAccount(account);
+        setActiveView('account-detail');
+        setToast({ message: `Programme: ${prog.title}. Allez dans l'onglet Live pour le voir.`, show: true });
+        setTimeout(() => setToast({ message: '', show: false }), 4000);
+      }
+    }
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        setIsGlobalSearchOpen(true);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   // Migration & Initial Load
   useEffect(() => {
@@ -386,6 +456,8 @@ export default function App() {
               account={selectedAccount} 
               onBack={() => handleSetView('manage-accounts')} 
               onPlayDownload={(url, title, type) => setPlayingDownload({ url, title, type })}
+              onOpenSearch={() => setIsGlobalSearchOpen(true)}
+              initialTab={accountInitialTab}
            />
         ) : (
           <>
@@ -394,6 +466,7 @@ export default function App() {
               setView={handleSetView} 
               isCollapsed={isSidebarCollapsed}
               onToggle={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+              onOpenSearch={() => setIsGlobalSearchOpen(true)}
             />
             
             <main className={`flex-1 overflow-y-auto relative scroll-smooth bg-transparent transition-all duration-300 ${activeView === 'downloads' ? 'p-0' : 'p-6 md:p-8'}`}>
@@ -496,6 +569,12 @@ export default function App() {
             {modal.message}
           </Modal>
         </div>
+
+        <GlobalSearch 
+          isOpen={isGlobalSearchOpen} 
+          onClose={() => setIsGlobalSearchOpen(false)} 
+          onSelectResult={handleGlobalSearchResult} 
+        />
       </div>
     </AcrylicPanel>
   );

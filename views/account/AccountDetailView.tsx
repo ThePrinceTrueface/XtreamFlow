@@ -28,10 +28,16 @@ interface SpeedTestMetrics {
     error?: string;
 }
 
-export const AccountDetailView: React.FC<{ account: XtreamAccount; onBack: () => void; onPlayDownload?: (url: string, title: string, type: 'vod' | 'series') => void }> = ({ account, onBack, onPlayDownload }) => {
-  const [activeTab, setActiveTab] = useState('info');
-  const [visitedTabs, setVisitedTabs] = useState<Set<string>>(new Set(['info']));
+export const AccountDetailView: React.FC<{ account: XtreamAccount; onBack: () => void; onPlayDownload?: (url: string, title: string, type: 'vod' | 'series') => void; onOpenSearch?: () => void; initialTab?: string }> = ({ account, onBack, onPlayDownload, onOpenSearch, initialTab }) => {
+  const [activeTab, setActiveTab] = useState(initialTab || 'info');
+  const [visitedTabs, setVisitedTabs] = useState<Set<string>>(new Set([initialTab || 'info']));
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  
+  useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab]);
   
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -484,6 +490,7 @@ export const AccountDetailView: React.FC<{ account: XtreamAccount; onBack: () =>
         accountName={account.name}
         isCollapsed={isSidebarCollapsed}
         onToggle={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+        onOpenSearch={onOpenSearch}
       />
       
       {/* Main Content Area */}
@@ -526,7 +533,7 @@ export const AccountDetailView: React.FC<{ account: XtreamAccount; onBack: () =>
 
          {visitedTabs.has('downloads') && (
             <div className="w-full h-full" style={{ display: activeTab === 'downloads' ? 'block' : 'none' }}>
-                <DownloadManager accountId={account.id} onClose={() => setActiveTab('info')} onPlay={onPlayDownload} />
+                <DownloadManager accountId={account.id} onPlay={onPlayDownload} />
             </div>
          )}
 
