@@ -219,9 +219,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     setIsLoading(true);
     setIsRetrying(false);
 
-    const secureUrl = url.replace(/^http:\/\//i, 'https://');
-    const finalUrl = retryCount > 0 ? createProxyUrl(url) : secureUrl;
-    const isHls = finalUrl.includes('.m3u8') || url.includes('.m3u8');
+    const isHls = url.includes('.m3u8');
     
     const attemptPlay = () => {
         if (!video) return;
@@ -261,7 +259,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         fragLoadingMaxRetry: 3,
       });
 
-      hls.loadSource(finalUrl);
+      hls.loadSource(url);
       hls.attachMedia(video);
       
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
@@ -292,7 +290,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         }
       });
     } else {
-      video.src = finalUrl;
+      video.src = url;
       video.load();
       attemptPlay();
       
