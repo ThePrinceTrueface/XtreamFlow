@@ -13,6 +13,12 @@ const ACCENT_COLORS = [
   { name: 'Green', value: '#107C10' },
   { name: 'Red', value: '#E81123' },
   { name: 'Orange', value: '#D83B01' },
+  { name: 'Teal', value: '#00B7C3' },
+  { name: 'Yellow', value: '#FFB900' },
+  { name: 'Mint', value: '#00CC6A' },
+  { name: 'Magenta', value: '#C239B3' },
+  { name: 'Slate', value: '#607D8B' },
+  { name: 'Indigo', value: '#4B0082' },
 ];
 
 export const SettingsView: React.FC<{ 
@@ -93,17 +99,17 @@ export const SettingsView: React.FC<{
              <div className="p-3 bg-pink-500/10 rounded-lg text-pink-400" style={{ color: accentColor, backgroundColor: accentColor + '1A' }}>
                 <Palette size={24} />
              </div>
-             <div className="flex-1">
+             <div className="flex-1 min-w-0">
                 <h3 className="text-lg font-medium mb-1">Appearance</h3>
                 <p className="text-fluent-subtext text-sm mb-4">
                   Choose your application accent color.
                 </p>
-                <div className="flex flex-wrap gap-3">
+                <div className="flex gap-3 overflow-x-auto py-2 px-1 pb-4 snap-x scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent">
                   {ACCENT_COLORS.map((color) => (
                     <button
                       key={color.value}
                       onClick={() => onAccentColorChange(color.value)}
-                      className={`w-10 h-10 rounded-full border-2 transition-all ${
+                      className={`w-10 h-10 shrink-0 rounded-full border-2 transition-all snap-start ${
                         accentColor === color.value ? 'border-white scale-110 shadow-lg' : 'border-transparent opacity-60 hover:opacity-100'
                       }`}
                       style={{ backgroundColor: color.value }}
