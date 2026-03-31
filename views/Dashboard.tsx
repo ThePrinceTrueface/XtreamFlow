@@ -58,7 +58,7 @@ export const Dashboard: React.FC<{ accounts: XtreamAccount[]; setView: (v: ViewS
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-fluent-accent/20 to-transparent border border-white/5 p-8 md:p-12">
         <div className="relative z-10 max-w-2xl">
           <h1 className="text-4xl md:text-5xl font-bold mb-4 tracking-tight">
-            Bonjour, <span className="text-fluent-accent">Streaming</span>
+            Let's start <span className="text-fluent-accent">streaming</span>
           </h1>
           <p className="text-lg text-win-subtext mb-8 leading-relaxed">
             Bienvenue sur XtreamFlow Pro. Votre centre de divertissement personnel est prêt. 
