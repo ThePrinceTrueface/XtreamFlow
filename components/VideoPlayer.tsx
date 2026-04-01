@@ -3,7 +3,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { 
   Play, Pause, Volume2, VolumeX, Maximize, Minimize, X, 
   SkipBack, SkipForward, Settings, List, ChevronLeft, ChevronRight, Square,
-  Expand, Shrink, RefreshCw, Clock, Info, Columns
+  Expand, Shrink, RefreshCw, Clock, Info, Columns, AudioLines
 } from 'lucide-react';
 import Hls from 'hls.js';
 import { XtreamStream, XtreamAccount } from '../types';
@@ -76,6 +76,12 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const [epgNow, setEpgNow] = useState<EpgItem | null>(null);
   const [epgNext, setEpgNext] = useState<EpgItem | null>(null);
   const [epgProgress, setEpgProgress] = useState(0);
+
+  // Audio Tracks State
+  const hlsRef = useRef<Hls | null>(null);
+  const [audioTracks, setAudioTracks] = useState<{id: number, name: string, lang: string}[]>([]);
+  const [currentAudioTrack, setCurrentAudioTrack] = useState<number>(-1);
+  const [showAudioMenu, setShowAudioMenu] = useState(false);
 
   const controlsTimeoutRef = useRef<number | null>(null);
 
@@ -216,13 +222,17 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     const video = videoRef.current;
     if (!video) return;
 
-    let hls: Hls | null = null;
     setIsLoading(true);
     setIsRetrying(false);
 
     const secureUrl = url.replace(/^http:\/\//i, 'https://');
     const finalUrl = retryCount > 0 ? createProxyUrl(url) : secureUrl;
     const isHls = finalUrl.includes('.m3u8') || url.includes('.m3u8');
+    
+    // Reset audio tracks on new video
+    setAudioTracks([]);
+    setCurrentAudioTrack(-1);
+    setShowAudioMenu(false);
     
     const attemptPlay = () => {
         if (!video) return;
@@ -251,7 +261,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     };
 
     if (isHls && Hls.isSupported()) {
-      hls = new Hls({
+      hlsRef.current = new Hls({
         enableWorker: true,
         lowLatencyMode: true,
         manifestLoadingTimeOut: 10000,
@@ -262,13 +272,46 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         fragLoadingMaxRetry: 3,
       });
 
+      const hls = hlsRef.current;
       hls.loadSource(finalUrl);
       hls.attachMedia(video);
       
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
         setIsLoading(false);
         setIsRetrying(false);
+        
+        // Load audio tracks
+        if (hls.audioTracks && hls.audioTracks.length > 0) {
+            const tracks = hls.audioTracks.map((t, index) => ({
+                id: index,
+                name: t.name || `Track ${index + 1}`,
+                lang: t.lang || ''
+            }));
+            setAudioTracks(tracks);
+            
+            // Auto-select preferred language
+            const prefLang = playerSettings.preferredAudioLanguage?.toLowerCase();
+            if (prefLang && prefLang !== 'original') {
+                const matchIndex = tracks.findIndex(t => 
+                    t.lang.toLowerCase().includes(prefLang) || 
+                    t.name.toLowerCase().includes(prefLang)
+                );
+                if (matchIndex !== -1) {
+                    hls.audioTrack = matchIndex;
+                    setCurrentAudioTrack(matchIndex);
+                } else {
+                    setCurrentAudioTrack(hls.audioTrack);
+                }
+            } else {
+                setCurrentAudioTrack(hls.audioTrack);
+            }
+        }
+
         attemptPlay();
+      });
+
+      hls.on(Hls.Events.AUDIO_TRACK_SWITCHED, (event, data) => {
+          setCurrentAudioTrack(data.id);
       });
 
       hls.on(Hls.Events.ERROR, (event, data) => {
@@ -331,7 +374,10 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
           updateProgress(currentItem, video.currentTime, video.duration);
       }
 
-      if (hls) hls.destroy();
+      if (hlsRef.current) {
+          hlsRef.current.destroy();
+          hlsRef.current = null;
+      }
       if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
       if (saveIntervalRef.current) clearInterval(saveIntervalRef.current);
       
@@ -772,10 +818,55 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                         </button>
                     )}
 
+                    {!isMini && audioTracks.length > 1 && (
+                        <div className="relative">
+                            <button 
+                                onClick={() => {
+                                    setShowAudioMenu(!showAudioMenu);
+                                    setIsSettingsOpen(false);
+                                }} 
+                                className={`transition-colors ${showAudioMenu ? 'text-fluent-accent' : 'text-white/70 hover:text-white'}`} 
+                                title="Pistes Audio"
+                            >
+                                <AudioLines size={20} />
+                            </button>
+
+                            {showAudioMenu && (
+                                <div className="absolute bottom-full right-0 mb-4 w-48 bg-[#1e1e1e] border border-white/10 rounded-xl shadow-2xl p-4 z-50 animate-in slide-in-from-bottom-2">
+                                    <h4 className="text-xs font-bold text-white/50 uppercase tracking-widest mb-3">Pistes Audio</h4>
+                                    <div className="space-y-1 max-h-48 overflow-y-auto custom-scrollbar">
+                                        {audioTracks.map((track) => (
+                                            <button
+                                                key={track.id}
+                                                onClick={() => {
+                                                    if (hlsRef.current) {
+                                                        hlsRef.current.audioTrack = track.id;
+                                                        setCurrentAudioTrack(track.id);
+                                                    }
+                                                    setShowAudioMenu(false);
+                                                }}
+                                                className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors flex items-center justify-between
+                                                    ${currentAudioTrack === track.id 
+                                                        ? 'bg-fluent-accent text-black font-bold' 
+                                                        : 'text-white/80 hover:bg-white/5'}`}
+                                            >
+                                                <span className="truncate">{track.name || track.lang || `Piste ${track.id + 1}`}</span>
+                                                {currentAudioTrack === track.id && <div className="w-1.5 h-1.5 rounded-full bg-black shrink-0 ml-2" />}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
                     {!isMini && (
                         <div className="relative">
                             <button 
-                                onClick={() => setIsSettingsOpen(!isSettingsOpen)} 
+                                onClick={() => {
+                                    setIsSettingsOpen(!isSettingsOpen);
+                                    setShowAudioMenu(false);
+                                }} 
                                 className={`transition-colors ${isSettingsOpen ? 'text-fluent-accent' : 'text-white/70 hover:text-white'}`} 
                                 title="Paramètres"
                             >

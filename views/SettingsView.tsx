@@ -1,10 +1,11 @@
 
 import React, { useRef, useState, useEffect } from 'react';
-import { Database, Download, Upload, Settings as SettingsIcon, Loader2, Palette } from 'lucide-react';
+import { Database, Download, Upload, Settings as SettingsIcon, Loader2, Palette, SlidersHorizontal } from 'lucide-react';
 import { XtreamAccount } from '../types';
 import { Card, Button } from '../components/Win11UI';
 import { createInlineWorker } from '../utils';
 import { FILE_WORKER_CODE } from '../workers/file.worker';
+import { useUserPreferences } from '../hooks/useUserPreferences';
 
 const ACCENT_COLORS = [
   { name: 'Pink', value: '#FF0080' },
@@ -31,6 +32,9 @@ export const SettingsView: React.FC<{
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const workerRef = useRef<Worker | null>(null);
+  
+  const { getPlayerSettings, updatePlayerSettings } = useUserPreferences('global');
+  const playerSettings = getPlayerSettings();
 
   useEffect(() => {
     // Initialize Worker
@@ -145,6 +149,35 @@ export const SettingsView: React.FC<{
                     <span>{isProcessing ? 'Processing...' : 'Import Backup'}</span>
                   </Button>
                   <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".json" className="hidden" />
+                </div>
+             </div>
+          </div>
+        </Card>
+        <Card>
+          <div className="flex items-start gap-4">
+             <div className="p-3 bg-orange-500/10 rounded-lg text-orange-400">
+                <SlidersHorizontal size={24} />
+             </div>
+             <div className="flex-1">
+                <h3 className="text-lg font-medium mb-1">Preferences</h3>
+                <p className="text-fluent-subtext text-sm mb-4">
+                  Configure your default player settings.
+                </p>
+                <div className="flex flex-col gap-2 max-w-xs">
+                  <label className="text-sm font-medium text-win-subtext">Preferred Audio Language</label>
+                  <select 
+                    className="bg-white/5 border border-white/10 rounded-md px-3 py-2 text-sm text-white focus:outline-none focus:border-white/30"
+                    value={playerSettings.preferredAudioLanguage || 'English'}
+                    onChange={(e) => updatePlayerSettings({ preferredAudioLanguage: e.target.value })}
+                  >
+                    <option value="English">English</option>
+                    <option value="French">French</option>
+                    <option value="Spanish">Spanish</option>
+                    <option value="German">German</option>
+                    <option value="Italian">Italian</option>
+                    <option value="Arabic">Arabic</option>
+                    <option value="Original">Original</option>
+                  </select>
                 </div>
              </div>
           </div>
