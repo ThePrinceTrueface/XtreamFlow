@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { Tv, RefreshCw, ArrowLeft, Search, Folder, Layout, List, Film, Clapperboard, Columns, PanelLeftOpen, PanelLeftClose, Star } from 'lucide-react';
 import { XtreamAccount, XtreamCategory, XtreamStream } from '../../types';
@@ -33,6 +34,8 @@ interface CategoryBrowserProps {
 
 export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type, preselectedChannelId, preselectedItemId, preselectedItemType, preselectedEpisodeId, preselectedSeason }) => {
   // ...
+  
+  const navigate = useNavigate();
   
   // Navigation & UI State
   const [uiMode, setUiMode] = useState<'normal' | 'flow'>(() => (localStorage.getItem('category_ui_mode') as 'normal' | 'flow') || 'normal');
@@ -83,6 +86,7 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
   // Ref for detail synchronization and Mute persistence without re-triggering effects
   const heroDetailRef = useRef<any>(null);
   const isTrailerMutedRef = useRef(true);
+  const preselectionHandledRef = useRef<string | null>(null);
 
   const { isFavorite, getFavorites } = useUserPreferences(account.id);
   const [loading, setLoading] = useState(true);
@@ -153,26 +157,62 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
   useEffect(() => { heroDetailRef.current = heroDetail; }, [heroDetail]);
   useEffect(() => { isTrailerMutedRef.current = isTrailerMuted; }, [isTrailerMuted]);
 
+  const fetchAndSetDetail = useCallback((item: XtreamStream) => {
+      const id = item.stream_id || item.series_id;
+      if (!id || type === 'live' || !account) return;
+
+      setLoading(true);
+      setError(null);
+      cacheService.getStreamInfo(account, type as 'vod' | 'series', id).then(res => {
+          setDetailData(Array.isArray(res) ? res[0] : res);
+          setLoading(false);
+      }).catch((err) => {
+          console.error("Error fetching stream info:", err);
+          setError("Erreur lors du chargement des détails.");
+          setLoading(false);
+      });
+  }, [account?.id, type]); // Use account.id to stabilize the callback
+
   // Handle deep linking/preselection
   useEffect(() => {
     if (loading || fullData.length === 0) return;
 
+    // 1. Handle Category Preselection
     if (preselectedChannelId) {
-      // Logic for Live TV
-      const category = categories.find(c => c.category_id === preselectedChannelId);
-      if (category) {
-        setSelectedCategory(category);
+      const isFav = preselectedChannelId === 'favorites';
+      const currentCatId = selectedCategory?.category_id;
+      
+      if (isFav && currentCatId !== 'favorites') {
+        setSelectedCategory(FAVORITES_CATEGORY);
         setCurrentLevel('items');
-      }
-    } else if (preselectedItemId) {
-      // Logic for VOD/Series
-      const item = fullData.find(i => i.stream_id?.toString() === preselectedItemId || i.series_id?.toString() === preselectedItemId);
-      if (item) {
-        setSelectedItem(item);
-        setCurrentLevel('detail');
+      } else if (!isFav && preselectedChannelId !== 'all' && currentCatId !== preselectedChannelId) {
+        const category = categories.find(c => c.category_id === preselectedChannelId);
+        if (category) {
+          setSelectedCategory(category);
+          setCurrentLevel('items');
+        }
       }
     }
-  }, [loading, fullData, categories, preselectedChannelId, preselectedItemId]);
+    
+    // 2. Handle Item Preselection
+    if (preselectedItemId) {
+      // Check if we already handled this specific item preselection
+      if (preselectionHandledRef.current === preselectedItemId) return;
+
+      const item = fullData.find(i => i.stream_id?.toString() === preselectedItemId || i.series_id?.toString() === preselectedItemId);
+      if (item) {
+        // Mark as handled BEFORE calling state updates to prevent loop
+        preselectionHandledRef.current = preselectedItemId;
+        
+        setSelectedItem(item);
+        setCurrentLevel('detail');
+        fetchAndSetDetail(item);
+      }
+    } else {
+        // Reset handled ref if no preselected item is present
+        preselectionHandledRef.current = null;
+    }
+  }, [loading, fullData, categories, preselectedChannelId, preselectedItemId, fetchAndSetDetail, selectedCategory]);
 
   // Reset player expansion when player closes
   const handleClosePlayer = useCallback(() => {
@@ -419,9 +459,7 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
         setHistoryStack([]);
         setSelectedItem(null);
         setHeroIndex(-1);
-        
-        // We use getFavorites(type) in the memo, so we just need to ensure displayData is not fighting it
-        // and maybe trigger a background fetch to refresh metadata if needed, but the view is already reactive.
+        navigate(`/account/${account.id}/${type}/favorites`);
         return;
     }
 
@@ -429,6 +467,12 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
     setCurrentLevel('items');
     setHistoryStack([]);
     setSelectedItem(null);
+    
+    if (cat) {
+        navigate(`/account/${account.id}/${type}/${cat.category_id}`);
+    } else {
+        navigate(`/account/${account.id}/${type}`);
+    }
     
     // Reset Data contexts
     setDisplayData([]);
@@ -470,21 +514,6 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
 
   // --- ACTIONS ---
 
-  const fetchAndSetDetail = useCallback((item: XtreamStream) => {
-      const id = item.stream_id || item.series_id;
-      if (!id || type === 'live') return;
-
-      setLoading(true);
-      setError(null);
-      cacheService.getStreamInfo(account, type as 'vod' | 'series', id).then(res => {
-          setDetailData(Array.isArray(res) ? res[0] : res);
-          setLoading(false);
-      }).catch((err) => {
-          console.error("Error fetching stream info:", err);
-          setError("Erreur lors du chargement des détails.");
-          setLoading(false);
-      });
-  }, [account, type]);
 
   const handleDetail = useCallback((item: XtreamStream) => {
         if (currentLevel === 'detail' && selectedItem) {
@@ -492,10 +521,22 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
         } else {
             setHistoryStack([]);
         }
+        
+        const itemId = (item.stream_id || item.series_id)?.toString();
+        if (itemId) {
+            preselectionHandledRef.current = itemId;
+        }
+        
         setSelectedItem(item);
         setCurrentLevel('detail');
         fetchAndSetDetail(item);
-  }, [currentLevel, selectedItem, fetchAndSetDetail]);
+        
+        if (selectedCategory) {
+            navigate(`/account/${account.id}/${type}/${selectedCategory.category_id}/${itemId}`);
+        } else {
+            navigate(`/account/${account.id}/${type}/all/${itemId}`);
+        }
+  }, [currentLevel, selectedItem, fetchAndSetDetail, account.id, type, selectedCategory, navigate]);
 
   const handlePlay = useCallback((item: XtreamStream) => {
     const baseUrl = `${account.protocol}://${account.host}:${account.port}`;
@@ -555,27 +596,51 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
           const previousItem = newHistory.pop();
           setHistoryStack(newHistory);
           if (previousItem) {
+              const itemId = (previousItem.stream_id || previousItem.series_id)?.toString();
+              if (itemId) {
+                  preselectionHandledRef.current = itemId;
+              }
+              
               setSelectedItem(previousItem);
               fetchAndSetDetail(previousItem);
+              
+              if (selectedCategory) {
+                  navigate(`/account/${account.id}/${type}/${selectedCategory.category_id}/${itemId}`);
+              } else {
+                  navigate(`/account/${account.id}/${type}/all/${itemId}`);
+              }
           }
       } else {
+          preselectionHandledRef.current = null;
           setCurrentLevel('items');
           setSelectedItem(null);
           setHistoryStack([]);
+          if (selectedCategory) {
+              navigate(`/account/${account.id}/${type}/${selectedCategory.category_id}`);
+          } else {
+              navigate(`/account/${account.id}/${type}`);
+          }
       }
-  }, [historyStack, fetchAndSetDetail]);
+  }, [historyStack, fetchAndSetDetail, account.id, type, selectedCategory, navigate]);
 
   const handleGoBack = useCallback(() => {
       if (currentLevel === 'detail') {
+          preselectionHandledRef.current = null;
           setCurrentLevel('items');
           setSelectedItem(null);
           setHistoryStack([]);
+          if (selectedCategory) {
+              navigate(`/account/${account.id}/${type}/${selectedCategory.category_id}`);
+          } else {
+              navigate(`/account/${account.id}/${type}`);
+          }
       } else if (currentLevel === 'items') {
           setCurrentLevel('categories');
           setSelectedCategory(null);
           setSearchQuery('');
+          navigate(`/account/${account.id}/${type}`);
       }
-  }, [currentLevel]);
+  }, [currentLevel, selectedCategory, account.id, type, navigate]);
 
   const handleGridClick = (item: XtreamStream) => {
       if (type === 'live') handlePlay(item);

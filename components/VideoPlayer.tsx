@@ -3,7 +3,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { 
   Play, Pause, Volume2, VolumeX, Maximize, Minimize, X, 
   SkipBack, SkipForward, Settings, List, ChevronLeft, ChevronRight, Square,
-  Expand, Shrink, RefreshCw, Clock, Info, Columns, AudioLines
+  Expand, Shrink, RefreshCw, Clock, Info, Columns, AudioLines, Captions
 } from 'lucide-react';
 import Hls from 'hls.js';
 import { XtreamStream, XtreamAccount } from '../types';
@@ -59,6 +59,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const [showControls, setShowControls] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [autoPlayBlocked, setAutoPlayBlocked] = useState(false);
   
   // Resume State
   const [resumePoint, setResumePoint] = useState<number | null>(null);
@@ -71,6 +72,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   // Live TV Specific State
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   
   // EPG State
   const [epgNow, setEpgNow] = useState<EpgItem | null>(null);
@@ -82,6 +84,10 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const [audioTracks, setAudioTracks] = useState<{id: number, name: string, lang: string}[]>([]);
   const [currentAudioTrack, setCurrentAudioTrack] = useState<number>(-1);
   const [showAudioMenu, setShowAudioMenu] = useState(false);
+
+  const [subtitleTracks, setSubtitleTracks] = useState<{id: number, name: string, lang: string}[]>([]);
+  const [currentSubtitleTrack, setCurrentSubtitleTrack] = useState<number>(-1); // -1 means disabled
+  const [showSubtitleMenu, setShowSubtitleMenu] = useState(false);
 
   const controlsTimeoutRef = useRef<number | null>(null);
 
@@ -225,14 +231,19 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     setIsLoading(true);
     setIsRetrying(false);
 
-    const secureUrl = url.replace(/^http:\/\//i, 'https://');
-    const finalUrl = retryCount > 0 ? createProxyUrl(url) : secureUrl;
-    const isHls = finalUrl.includes('.m3u8') || url.includes('.m3u8');
+    const isMixedContent = window.location.protocol === 'https:' && url.startsWith('http:');
+    const finalUrl = (retryCount > 0 || isMixedContent) ? createProxyUrl(url) : url.replace(/^http:\/\//i, 'https://');
+    const isHls = finalUrl.includes('.m3u8') || url.includes('.m3u8') || type === 'live';
     
-    // Reset audio tracks on new video
+    // Reset audio and subtitle tracks on new video
     setAudioTracks([]);
     setCurrentAudioTrack(-1);
     setShowAudioMenu(false);
+    setSubtitleTracks([]);
+    setCurrentSubtitleTrack(-1);
+    setShowSubtitleMenu(false);
+    setAutoPlayBlocked(false);
+    setError(null);
     
     const attemptPlay = () => {
         if (!video) return;
@@ -246,8 +257,19 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         const playPromise = video.play();
         if (playPromise !== undefined) {
             playPromise.catch(error => {
-                if (error.name !== 'AbortError') {
-                    console.error("Auto-play blocked", error);
+                if (error.name === 'NotAllowedError') {
+                    console.warn("Auto-play blocked, trying muted...");
+                    video.muted = true;
+                    setIsMuted(true);
+                    video.play().catch(e => {
+                        console.error("Muted auto-play also blocked", e);
+                        setIsPlaying(false);
+                        setIsLoading(false);
+                        setAutoPlayBlocked(true);
+                    });
+                } else if (error.name !== 'AbortError') {
+                    console.error("Playback error", error);
+                    setIsPlaying(false);
                 }
             });
         }
@@ -279,6 +301,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
         setIsLoading(false);
         setIsRetrying(false);
+        setError(null);
         attemptPlay();
       });
 
@@ -314,6 +337,22 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
           setCurrentAudioTrack(data.id);
       });
 
+      hls.on(Hls.Events.SUBTITLE_TRACKS_UPDATED, (event, data) => {
+        if (data.subtitleTracks && data.subtitleTracks.length > 0) {
+            const tracks = data.subtitleTracks.map((t, index) => ({
+                id: index,
+                name: t.name || `Sous-titre ${index + 1}`,
+                lang: t.lang || ''
+            }));
+            setSubtitleTracks(tracks);
+            setCurrentSubtitleTrack(hls.subtitleTrack);
+        }
+      });
+
+      hls.on(Hls.Events.SUBTITLE_TRACK_SWITCH, (event, data) => {
+          setCurrentSubtitleTrack(data.id);
+      });
+
       hls.on(Hls.Events.ERROR, (event, data) => {
         console.error("HLS Error", data);
         if (data.fatal) {
@@ -341,7 +380,14 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       attemptPlay();
       
       video.onerror = () => {
-          console.error("Native Video Error", video.error);
+          const err = video.error;
+          let msg = "Erreur de lecture.";
+          if (err?.code === 4) msg = "Format de source non supporté par le navigateur.";
+          else if (err?.code === 3) msg = "Erreur de décodage.";
+          else if (err?.code === 2) msg = "Erreur réseau.";
+          
+          console.error("Native Video Error", err);
+          setError(msg);
           setIsLoading(true);
           setIsRetrying(true);
           if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
@@ -359,6 +405,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         setIsLoading(false);
         setIsRetrying(false);
         setIsPlaying(true);
+        setError(null);
     };
     const onPause = () => setIsPlaying(false);
 
@@ -534,6 +581,14 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
              </div>
         )}
 
+        {/* Error Overlay */}
+        {error && isRetrying && (
+            <div className="absolute top-24 left-1/2 -translate-x-1/2 bg-red-500/90 text-white px-4 py-2 rounded-lg z-50 shadow-lg font-medium animate-in slide-in-from-top-4 fade-in flex items-center gap-2">
+                <Info size={16} />
+                {error}
+            </div>
+        )}
+
         {/* Loading Spinner */}
         {isLoading && (
             <div className="absolute inset-0 flex flex-col items-center justify-center z-10 pointer-events-none bg-black/40 backdrop-blur-sm">
@@ -549,6 +604,27 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                         </div>
                     </div>
                 )}
+            </div>
+        )}
+
+        {/* Auto-play Blocked Overlay */}
+        {autoPlayBlocked && !isPlaying && !isLoading && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center z-20 bg-black/60 backdrop-blur-sm">
+                <button 
+                    onClick={() => {
+                        if (videoRef.current) {
+                            videoRef.current.muted = false;
+                            setIsMuted(false);
+                            videoRef.current.play();
+                            setAutoPlayBlocked(false);
+                            setIsPlaying(true);
+                        }
+                    }}
+                    className="w-20 h-20 bg-fluent-accent text-black rounded-full flex items-center justify-center shadow-2xl hover:scale-110 transition-transform"
+                >
+                    <Play size={40} fill="currentColor" />
+                </button>
+                <p className="text-white mt-4 font-medium">Cliquer pour lancer la lecture</p>
             </div>
         )}
 
@@ -823,6 +899,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                             <button 
                                 onClick={() => {
                                     setShowAudioMenu(!showAudioMenu);
+                                    setShowSubtitleMenu(false);
                                     setIsSettingsOpen(false);
                                 }} 
                                 className={`transition-colors ${showAudioMenu ? 'text-fluent-accent' : 'text-white/70 hover:text-white'}`} 
@@ -863,12 +940,76 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                         </div>
                     )}
 
+                    {!isMini && subtitleTracks.length > 0 && (
+                        <div className="relative">
+                            <button 
+                                onClick={() => {
+                                    setShowSubtitleMenu(!showSubtitleMenu);
+                                    setShowAudioMenu(false);
+                                    setIsSettingsOpen(false);
+                                }} 
+                                className={`transition-colors ${showSubtitleMenu ? 'text-fluent-accent' : 'text-white/70 hover:text-white'}`} 
+                                title="Sous-titres"
+                            >
+                                <Captions size={20} />
+                            </button>
+
+                            {showSubtitleMenu && (
+                                <div className="absolute bottom-full right-0 mb-4 w-48 bg-[#1e1e1e] border border-white/10 rounded-xl shadow-2xl p-4 z-50 animate-in slide-in-from-bottom-2">
+                                    <h4 className="text-xs font-bold text-white/50 uppercase tracking-widest mb-3">Sous-titres</h4>
+                                    <div className="space-y-1 max-h-48 overflow-y-auto custom-scrollbar">
+                                        <button
+                                            onClick={() => {
+                                                if (hlsRef.current) {
+                                                    hlsRef.current.subtitleTrack = -1;
+                                                    setCurrentSubtitleTrack(-1);
+                                                }
+                                                setShowSubtitleMenu(false);
+                                            }}
+                                            className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors flex items-center justify-between
+                                                ${currentSubtitleTrack === -1 
+                                                    ? 'bg-fluent-accent text-black font-bold' 
+                                                    : 'text-white/80 hover:bg-white/5'}`}
+                                        >
+                                            <span>Désactivés</span>
+                                            {currentSubtitleTrack === -1 && <div className="w-1.5 h-1.5 rounded-full bg-black shrink-0 ml-2" />}
+                                        </button>
+                                        
+                                        {subtitleTracks.map((track) => {
+                                            const isSelected = currentSubtitleTrack === track.id;
+                                            return (
+                                                <button
+                                                    key={track.id}
+                                                    onClick={() => {
+                                                        if (hlsRef.current) {
+                                                            hlsRef.current.subtitleTrack = track.id;
+                                                            setCurrentSubtitleTrack(track.id);
+                                                        }
+                                                        setShowSubtitleMenu(false);
+                                                    }}
+                                                    className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors flex items-center justify-between
+                                                        ${isSelected 
+                                                            ? 'bg-fluent-accent text-black font-bold' 
+                                                            : 'text-white/80 hover:bg-white/5'}`}
+                                                >
+                                                    <span className="truncate">{track.name || track.lang || `Piste ${track.id + 1}`}</span>
+                                                    {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-black shrink-0 ml-2" />}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
                     {!isMini && (
                         <div className="relative">
                             <button 
                                 onClick={() => {
                                     setIsSettingsOpen(!isSettingsOpen);
                                     setShowAudioMenu(false);
+                                    setShowSubtitleMenu(false);
                                 }} 
                                 className={`transition-colors ${isSettingsOpen ? 'text-fluent-accent' : 'text-white/70 hover:text-white'}`} 
                                 title="Paramètres"
