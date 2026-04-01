@@ -1,6 +1,6 @@
-import { db } from '../../db';
-import { XtreamAccount, XtreamCategory, XtreamStream, XtreamEPGProgram } from '../../types';
-import { createProxyUrl, decodeBase64 } from '../../utils';
+import { db } from '../db';
+import { XtreamAccount, XtreamCategory, XtreamStream, XtreamEPGProgram } from '../types';
+import { createProxyUrl, decodeBase64 } from '../utils';
 
 export class CacheService {
   private static instance: CacheService;

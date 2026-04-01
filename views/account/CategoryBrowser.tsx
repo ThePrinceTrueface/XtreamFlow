@@ -8,7 +8,7 @@ import { VideoPlayer } from '../../components/VideoPlayer';
 import { createProxyUrl, createInlineWorker } from '../../utils';
 import { XTREAM_WORKER_CODE } from '../../workers/xtream.worker';
 import { useUserPreferences } from '../../hooks/useUserPreferences';
-import { cacheService } from '../../src/services/cacheService';
+import { cacheService } from '../../services/cacheService';
 
 // Sous-modules modularisés
 import { HeroSection } from './components/HeroSection';

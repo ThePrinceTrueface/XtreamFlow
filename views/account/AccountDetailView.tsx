@@ -7,8 +7,10 @@ import { calculateDaysRemaining, formatDate, createProxyUrl } from '../../utils'
 import { AccountSidebar } from '../../components/Sidebars';
 import { CategoryBrowser } from './CategoryBrowser';
 import { DownloadManager } from './components/DownloadManager';
-import { cacheService } from '../../src/services/cacheService';
+import { cacheService } from '../../services/cacheService';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { db } from '../../db';
 
 interface RevisionResults {
   userInfo: any;
@@ -29,26 +31,27 @@ interface SpeedTestMetrics {
     error?: string;
 }
 
-export const AccountDetailView: React.FC<{ account: XtreamAccount | null; onBack: () => void; onPlayDownload?: (url: string, title: string, type: 'vod' | 'series') => void; onOpenSearch?: () => void; initialTab?: string; preselectedChannelId?: string; preselectedItemId?: string; preselectedItemType?: string; preselectedEpisodeId?: string; preselectedSeason?: string }> = ({ account, onBack, onPlayDownload, onOpenSearch, initialTab, preselectedChannelId, preselectedItemId, preselectedItemType, preselectedEpisodeId, preselectedSeason }) => {
+export const AccountDetailView: React.FC<{ onBack: () => void; onPlayDownload?: (url: string, title: string, type: 'vod' | 'series') => void; onOpenSearch?: () => void; }> = ({ onBack, onPlayDownload, onOpenSearch }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const { accountId } = useParams<{ accountId: string }>();
+  const account = useLiveQuery(() => db.accounts.get(accountId!), [accountId]) || null;
   
   // Determine active tab from URL or fallback
   const currentPath = location.pathname.split('/');
   const tabFromUrl = currentPath.length > 3 ? currentPath[3] : undefined;
   
-  const [activeTab, setActiveTab] = useState(tabFromUrl || initialTab || 'info');
-  const [visitedTabs, setVisitedTabs] = useState<Set<string>>(new Set([tabFromUrl || initialTab || 'info']));
+  const [activeTab, setActiveTab] = useState(tabFromUrl || 'info');
+  const [visitedTabs, setVisitedTabs] = useState<Set<string>>(new Set([tabFromUrl || 'info']));
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   
   useEffect(() => {
     if (tabFromUrl) {
       setActiveTab(tabFromUrl);
-    } else if (initialTab) {
-      setActiveTab(initialTab);
+    } else {
+      setActiveTab('info');
     }
-  }, [tabFromUrl, initialTab]);
+  }, [tabFromUrl]);
   
   const handleTabChange = (tab: string) => {
     setActiveTab(tab);
@@ -548,19 +551,19 @@ export const AccountDetailView: React.FC<{ account: XtreamAccount | null; onBack
          {/* Category Browsers */}
          {visitedTabs.has('live') && account && (
             <div className="w-full h-full" style={{ display: activeTab === 'live' ? 'block' : 'none' }}>
-                <CategoryBrowser account={account} type="live" preselectedChannelId={preselectedChannelId} preselectedItemId={preselectedItemId} preselectedItemType={preselectedItemType} />
+                <CategoryBrowser account={account} type="live" />
             </div>
          )}
 
          {visitedTabs.has('vod') && account && (
             <div className="w-full h-full" style={{ display: activeTab === 'vod' ? 'block' : 'none' }}>
-                <CategoryBrowser account={account} type="vod" preselectedItemId={preselectedItemId} preselectedItemType={preselectedItemType} preselectedEpisodeId={preselectedEpisodeId} preselectedSeason={preselectedSeason} />
+                <CategoryBrowser account={account} type="vod" />
             </div>
          )}
 
          {visitedTabs.has('series') && account && (
             <div className="w-full h-full" style={{ display: activeTab === 'series' ? 'block' : 'none' }}>
-                <CategoryBrowser account={account} type="series" preselectedItemId={preselectedItemId} preselectedItemType={preselectedItemType} preselectedEpisodeId={preselectedEpisodeId} preselectedSeason={preselectedSeason} />
+                <CategoryBrowser account={account} type="series" />
             </div>
          )}
 

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { Play, Loader2 } from 'lucide-react';
 import { XtreamStream, XtreamEPGProgram, XtreamAccount } from '../../../types';
 import { createProxyUrl, decodeBase64 } from '../../../utils';
-import { cacheService } from '../../../src/services/cacheService';
+import { cacheService } from '../../../services/cacheService';
 
 // Forward ref to support scrollTo
 const List = React.forwardRef((props: any, ref: any) => {

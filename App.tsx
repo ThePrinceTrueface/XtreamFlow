@@ -64,13 +64,6 @@ export default function App() {
   
   // View/Selection State
   const [editingAccount, setEditingAccount] = useState<XtreamAccount | null>(null);
-  const [selectedAccount, setSelectedAccount] = useState<XtreamAccount | null>(null);
-  const [accountInitialTab, setAccountInitialTab] = useState<string>('info');
-  const [preselectedChannelId, setPreselectedChannelId] = useState<string | undefined>(undefined);
-  const [preselectedItemId, setPreselectedItemId] = useState<string | undefined>(undefined);
-  const [preselectedItemType, setPreselectedItemType] = useState<string | undefined>(undefined);
-  const [preselectedEpisodeId, setPreselectedEpisodeId] = useState<string | undefined>(undefined);
-  const [preselectedSeason, setPreselectedSeason] = useState<string | undefined>(undefined);
   
   // Cross-View State passing
   const [serverToPrefill, setServerToPrefill] = useState<SavedServer | null>(null);
@@ -118,21 +111,12 @@ export default function App() {
       let title = stream.name;
       let type: 'live' | 'vod' | 'series' = stream.type;
 
-      setSelectedAccount(account);
-      setAccountInitialTab(stream.type === 'live' ? 'live' : stream.type === 'movie' ? 'vod' : 'series');
-      setPreselectedItemId(stream.stream_id || stream.series_id);
-      setPreselectedItemType(stream.type);
-      setPreselectedEpisodeId(stream.episode_num?.toString());
-      setPreselectedSeason(stream.season?.toString());
-      navigate(`/account/${account.id}`);
+      navigate(`/account/${account.id}/${stream.type === 'live' ? 'live' : stream.type === 'movie' ? 'vod' : 'series'}`);
     } else if (result.type === 'epg') {
       const prog = result.data;
       const account = await db.accounts.get(prog.accountId);
       if (account) {
-        setAccountInitialTab('live');
-        setPreselectedChannelId(prog.stream_id);
-        setSelectedAccount(account);
-        navigate(`/account/${account.id}`);
+        navigate(`/account/${account.id}/live`);
         setToast({ message: `Programme: ${prog.title}. Allez dans l'onglet Live pour le voir.`, show: true });
         setTimeout(() => setToast({ message: '', show: false }), 4000);
       }
@@ -425,7 +409,6 @@ export default function App() {
   };
 
   const handleSelectAccount = (account: XtreamAccount) => {
-    setSelectedAccount(account);
     navigate(`/account/${account.id}`);
   };
 
@@ -438,16 +421,9 @@ export default function App() {
         <Routes>
           <Route path="/account/:accountId/*" element={
             <AccountDetailView 
-              account={selectedAccount} 
               onBack={() => navigate('/manage-accounts')} 
               onPlayDownload={(url, title, type) => setPlayingDownload({ url, title, type })}
               onOpenSearch={() => setIsGlobalSearchOpen(true)}
-              initialTab={accountInitialTab}
-              preselectedChannelId={preselectedChannelId}
-              preselectedItemId={preselectedItemId}
-              preselectedItemType={preselectedItemType}
-              preselectedEpisodeId={preselectedEpisodeId}
-              preselectedSeason={preselectedSeason}
             />
           } />
           <Route path="*" element={
