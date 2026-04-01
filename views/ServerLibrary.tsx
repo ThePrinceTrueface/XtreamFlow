@@ -164,7 +164,7 @@ export const ServerLibrary: React.FC<{
                                     className="!px-2 !py-1" 
                                     onClick={() => {
                                       onViewAccounts(server);
-                                      navigate('/accounts');
+                                      navigate('/manage-accounts');
                                     }}
                                     title="View Accounts using this Server"
                                 >

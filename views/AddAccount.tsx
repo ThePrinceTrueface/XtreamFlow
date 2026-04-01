@@ -174,7 +174,7 @@ export const AddAccount: React.FC<{
       setTags([]);
       setCurrentStatus('untested');
       setTestResult(null);
-      navigate('/accounts');
+      navigate('/manage-accounts');
     } else {
       navigate(-1);
     }
@@ -363,7 +363,7 @@ export const AddAccount: React.FC<{
                        className="text-red-400 hover:bg-red-500/10 hover:text-red-300 px-2"
                        onClick={() => {
                          onDelete(initialData.id);
-                         navigate('/accounts');
+                         navigate('/manage-accounts');
                        }}
                      >
                        <Trash2 size={16} /> Delete

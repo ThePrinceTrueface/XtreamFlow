@@ -225,7 +225,7 @@ export default function App() {
             `The account "${account.name}" has been successfully ${editingAccount ? 'updated' : 'added'}.`,
             () => {
                setEditingAccount(null);
-               navigate('/accounts');
+               navigate('/manage-accounts');
             },
             "OK"
           );
