@@ -4,6 +4,8 @@ import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import { CheckCircle2, Minus, Square, X } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from './db';
+import { useAccounts } from './hooks/useAccounts';
+import { useServers } from './hooks/useServers';
 import { XtreamAccount, ViewState, ModalConfig, ModalType, SavedServer, AppBackup } from './types';
 import { AcrylicPanel, Modal } from './components/Win11UI';
 import { generateId, createProxyUrl } from './utils';
@@ -56,9 +58,9 @@ export default function App() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [playingDownload, setPlayingDownload] = useState<{ url: string, title: string, type: 'live' | 'vod' | 'series' } | null>(null);
   
-  // Data State (Dexie)
-  const accounts = useLiveQuery(() => db.accounts.toArray()) || [];
-  const savedServers = useLiveQuery(() => db.servers.toArray()) || [];
+  // Data State (using custom hooks)
+  const { accounts } = useAccounts();
+  const { servers: savedServers } = useServers();
   
   // View/Selection State
   const [editingAccount, setEditingAccount] = useState<XtreamAccount | null>(null);
