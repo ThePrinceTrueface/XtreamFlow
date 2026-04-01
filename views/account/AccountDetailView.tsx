@@ -37,20 +37,21 @@ export const AccountDetailView: React.FC<{ onBack: () => void; onPlayDownload?: 
   const { accountId } = useParams<{ accountId: string }>();
   const account = useLiveQuery(() => db.accounts.get(accountId!), [accountId]) || null;
   
-  // Determine active tab from URL or fallback
-  const currentPath = location.pathname.split('/');
-  const tabFromUrl = currentPath.length > 3 ? currentPath[3] : undefined;
+  // Determine active tab and deeper navigation from URL
+  const currentPath = location.pathname.split('/').filter(Boolean);
+  // Path is /account/:accountId/:tab/:category/:item/:episode
+  const tabFromUrl = currentPath.length > 2 ? currentPath[2] : 'info';
+  const categoryIdFromUrl = currentPath.length > 3 ? currentPath[3] : undefined;
+  const itemIdFromUrl = currentPath.length > 4 ? currentPath[4] : undefined;
+  const episodeIdFromUrl = currentPath.length > 5 ? currentPath[5] : undefined;
   
-  const [activeTab, setActiveTab] = useState(tabFromUrl || 'info');
-  const [visitedTabs, setVisitedTabs] = useState<Set<string>>(new Set([tabFromUrl || 'info']));
+  const [activeTab, setActiveTab] = useState(tabFromUrl);
+  const [visitedTabs, setVisitedTabs] = useState<Set<string>>(new Set([tabFromUrl]));
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   
   useEffect(() => {
-    if (tabFromUrl) {
-      setActiveTab(tabFromUrl);
-    } else {
-      setActiveTab('info');
-    }
+    setActiveTab(tabFromUrl);
+    setVisitedTabs(prev => new Set(prev).add(tabFromUrl));
   }, [tabFromUrl]);
   
   const handleTabChange = (tab: string) => {
@@ -551,19 +552,19 @@ export const AccountDetailView: React.FC<{ onBack: () => void; onPlayDownload?: 
          {/* Category Browsers */}
          {visitedTabs.has('live') && account && (
             <div className="w-full h-full" style={{ display: activeTab === 'live' ? 'block' : 'none' }}>
-                <CategoryBrowser account={account} type="live" />
+                <CategoryBrowser account={account} type="live" preselectedChannelId={categoryIdFromUrl} preselectedItemId={itemIdFromUrl} />
             </div>
          )}
 
          {visitedTabs.has('vod') && account && (
             <div className="w-full h-full" style={{ display: activeTab === 'vod' ? 'block' : 'none' }}>
-                <CategoryBrowser account={account} type="vod" />
+                <CategoryBrowser account={account} type="vod" preselectedItemId={itemIdFromUrl} preselectedEpisodeId={episodeIdFromUrl} />
             </div>
          )}
 
          {visitedTabs.has('series') && account && (
             <div className="w-full h-full" style={{ display: activeTab === 'series' ? 'block' : 'none' }}>
-                <CategoryBrowser account={account} type="series" />
+                <CategoryBrowser account={account} type="series" preselectedItemId={itemIdFromUrl} preselectedEpisodeId={episodeIdFromUrl} />
             </div>
          )}
 

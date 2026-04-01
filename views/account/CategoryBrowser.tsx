@@ -153,6 +153,27 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
   useEffect(() => { heroDetailRef.current = heroDetail; }, [heroDetail]);
   useEffect(() => { isTrailerMutedRef.current = isTrailerMuted; }, [isTrailerMuted]);
 
+  // Handle deep linking/preselection
+  useEffect(() => {
+    if (loading || fullData.length === 0) return;
+
+    if (preselectedChannelId) {
+      // Logic for Live TV
+      const category = categories.find(c => c.category_id === preselectedChannelId);
+      if (category) {
+        setSelectedCategory(category);
+        setCurrentLevel('items');
+      }
+    } else if (preselectedItemId) {
+      // Logic for VOD/Series
+      const item = fullData.find(i => i.stream_id?.toString() === preselectedItemId || i.series_id?.toString() === preselectedItemId);
+      if (item) {
+        setSelectedItem(item);
+        setCurrentLevel('detail');
+      }
+    }
+  }, [loading, fullData, categories, preselectedChannelId, preselectedItemId]);
+
   // Reset player expansion when player closes
   const handleClosePlayer = useCallback(() => {
       setPlayer(null);
