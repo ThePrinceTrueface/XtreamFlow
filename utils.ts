@@ -72,28 +72,44 @@ export const calculateDaysRemaining = (timestamp: string | number) => {
   return Math.ceil(diff / (1000 * 60 * 60 * 24));
 };
 
-export const checkConnection = async (account: Partial<XtreamAccount>): Promise<{ success: boolean; message?: string }> => {
+export const checkConnection = async (account: Partial<XtreamAccount>): Promise<{ success: boolean; message?: string, protocol?: 'http' | 'https', port?: string }> => {
     if (!account.host || !account.username || !account.password) {
         return { success: false, message: 'Missing credentials' };
     }
     
     const port = account.port || '80';
     const protocol = account.protocol || 'http';
-    const targetUrl = `${protocol}://${account.host}:${port}/player_api.php?username=${account.username}&password=${account.password}`;
-    const proxyUrl = createProxyUrl(targetUrl);
-
-    try {
+    
+    const tryConnect = async (proto: string, prt: string) => {
+        const targetUrl = `${proto}://${account.host}:${prt}/player_api.php?username=${account.username}&password=${account.password}`;
+        const proxyUrl = createProxyUrl(targetUrl);
         const response = await fetch(proxyUrl);
         if (!response.ok) throw new Error('Network error');
         
         const data = await response.json();
         // Xtream API returns user_info.auth = 1 on success
         if (data && data.user_info && data.user_info.auth === 1) {
-            return { success: true };
+            return data;
         } else {
-            return { success: false, message: 'Invalid credentials or expired' };
+            throw new Error('Invalid credentials or expired');
         }
+    };
+
+    try {
+        await tryConnect(protocol, port);
+        return { success: true, protocol, port };
     } catch (error: any) {
+        // If HTTP fails, it might be due to a CORS error caused by a redirect to HTTPS.
+        // Let's try HTTPS automatically.
+        if (protocol === 'http') {
+            try {
+                const newPort = port === '80' ? '443' : port;
+                await tryConnect('https', newPort);
+                return { success: true, protocol: 'https', port: newPort };
+            } catch (httpsError: any) {
+                return { success: false, message: error.message || 'Connection failed' };
+            }
+        }
         return { success: false, message: error.message || 'Connection failed' };
     }
 };

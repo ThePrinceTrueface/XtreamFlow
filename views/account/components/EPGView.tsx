@@ -404,7 +404,7 @@ export const EPGView: React.FC<EPGViewProps> = ({ channels, account, onChannelCl
                  );
              }) : (
                  <div className="absolute inset-0 flex items-center px-4 text-white/20 text-xs italic">
-                     {isLoading ? <span className="flex items-center gap-2"><Loader2 size={12} className="animate-spin"/> Chargement...</span> : "Pas d'EPG disponible"}
+                     {isLoading ? <span className="flex items-center gap-2"><Loader2 size={12} className="animate-spin"/> Chargement...</span> : <span>Pas d'EPG disponible</span>}
                  </div>
              )}
           </div>

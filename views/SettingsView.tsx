@@ -142,7 +142,7 @@ export const SettingsView: React.FC<{
                   </Button>
                   <Button onClick={handleImportClick} variant="secondary" disabled={isProcessing}>
                     {isProcessing ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
-                    {isProcessing ? 'Processing...' : 'Import Backup'}
+                    <span>{isProcessing ? 'Processing...' : 'Import Backup'}</span>
                   </Button>
                   <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".json" className="hidden" />
                 </div>

@@ -126,6 +126,12 @@ export const AddAccount: React.FC<{
     
     if (result.success) {
         setCurrentStatus('active');
+        if (result.protocol && result.protocol !== protocol) {
+            setProtocol(result.protocol);
+        }
+        if (result.port && result.port !== port) {
+            setPort(result.port);
+        }
         setTestResult({ success: true, message: "Connection successful! Account is active." });
     } else {
         setCurrentStatus('error');
@@ -363,7 +369,7 @@ export const AddAccount: React.FC<{
                     </Button>
                     <Button variant="secondary" onClick={handleTestConnection} disabled={isTesting}>
                         {isTesting ? <Loader2 size={16} className="animate-spin" /> : <Activity size={16} />}
-                        Test Connection
+                        <span>Test Connection</span>
                     </Button>
                     <Button onClick={handleSubmit}>{initialData ? 'Update Account' : 'Save Account'}</Button>
                 </div>
