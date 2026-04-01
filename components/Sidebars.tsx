@@ -17,6 +17,7 @@ import {
   Download
 } from 'lucide-react';
 import { ViewState } from '../types';
+import { useNavigate } from 'react-router-dom';
 
 // Generic Nav Item Component
 const NavItem: React.FC<{ 
@@ -53,6 +54,7 @@ interface SidebarProps {
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ activeView, setView, isCollapsed, onToggle, onOpenSearch }) => {
+  const navigate = useNavigate();
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'add-account', label: 'Add Account', icon: Plus },
@@ -108,7 +110,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeView, setView, isCollaps
           <NavItem 
             key={item.id}
             isActive={activeView === item.id}
-            onClick={() => setView(item.id as ViewState)}
+            onClick={() => {
+              setView(item.id as ViewState);
+              navigate(`/${item.id}`);
+            }}
             icon={item.icon}
             label={item.label}
             isCollapsed={isCollapsed}

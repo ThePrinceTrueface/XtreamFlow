@@ -3,6 +3,7 @@ import { Server, Plus, Trash2, Tag, Edit3, Globe, Shield, X, Save, AlertCircle, 
 import { SavedServer } from '../types';
 import { Card, Button, Input } from '../components/Win11UI';
 import { generateId } from '../utils';
+import { useNavigate } from 'react-router-dom';
 
 export const ServerLibrary: React.FC<{ 
   servers: SavedServer[]; 
@@ -11,6 +12,7 @@ export const ServerLibrary: React.FC<{
   onAddAccount: (server: SavedServer) => void;
   onViewAccounts: (server: SavedServer) => void;
 }> = ({ servers, onSave, onDelete, onAddAccount, onViewAccounts }) => {
+  const navigate = useNavigate();
   const [isEditing, setIsEditing] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
 
@@ -149,7 +151,10 @@ export const ServerLibrary: React.FC<{
                            <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                                <Button 
                                     className="!px-2 !py-1 text-fluent-accent hover:bg-fluent-accent/10 hover:text-fluent-accentHover border border-fluent-accent/20"
-                                    onClick={() => onAddAccount(server)}
+                                    onClick={() => {
+                                      onAddAccount(server);
+                                      navigate('/add-account');
+                                    }}
                                     title="Add Account from this Server"
                                 >
                                    <UserPlus size={14} />
@@ -157,7 +162,10 @@ export const ServerLibrary: React.FC<{
                                <Button 
                                     variant="secondary" 
                                     className="!px-2 !py-1" 
-                                    onClick={() => onViewAccounts(server)}
+                                    onClick={() => {
+                                      onViewAccounts(server);
+                                      navigate('/accounts');
+                                    }}
                                     title="View Accounts using this Server"
                                 >
                                    <ListFilter size={14} />

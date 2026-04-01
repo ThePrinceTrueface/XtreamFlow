@@ -3,8 +3,10 @@ import { Plus, Database, Star, Terminal, Settings as SettingsIcon, Play, Clock, 
 import { XtreamAccount, ViewState, GlobalPreferences, XtreamStream } from '../types';
 import { Card, Button } from '../components/Win11UI';
 import { decodeBase64 } from '../utils';
+import { useNavigate } from 'react-router-dom';
 
 export const Dashboard: React.FC<{ accounts: XtreamAccount[]; setView: (v: ViewState) => void }> = ({ accounts, setView }) => {
+  const navigate = useNavigate();
   // Load preferences to show recent activity
   const recentActivity = useMemo(() => {
     try {
@@ -66,10 +68,10 @@ export const Dashboard: React.FC<{ accounts: XtreamAccount[]; setView: (v: ViewS
             Gérez vos comptes, explorez votre catalogue et reprenez là où vous vous étiez arrêté.
           </p>
           <div className="flex flex-wrap gap-4">
-            <Button variant="primary" onClick={() => setView('add-account')} className="h-11 px-6">
+            <Button variant="primary" onClick={() => navigate('/add-account')} className="h-11 px-6">
               <Plus size={18} /> Ajouter un compte
             </Button>
-            <Button variant="secondary" onClick={() => setView('manage-accounts')} className="h-11 px-6 bg-white/5 border-white/10 hover:bg-white/10">
+            <Button variant="secondary" onClick={() => navigate('/manage-accounts')} className="h-11 px-6 bg-white/5 border-white/10 hover:bg-white/10">
               <SettingsIcon size={18} /> Gérer les connexions
             </Button>
           </div>
@@ -134,7 +136,7 @@ export const Dashboard: React.FC<{ accounts: XtreamAccount[]; setView: (v: ViewS
                 onClick={() => {
                     // This would ideally open the account and play the item
                     // For now, we can just navigate to manage accounts
-                    setView('manage-accounts');
+                    navigate('/manage-accounts');
                 }}
               >
                 <div className="aspect-video relative overflow-hidden">
@@ -173,25 +175,25 @@ export const Dashboard: React.FC<{ accounts: XtreamAccount[]; setView: (v: ViewS
             icon={<Plus size={24} />} 
             title="Nouveau Compte" 
             subtitle="Ajouter Xtream Codes"
-            onClick={() => setView('add-account')} 
+            onClick={() => navigate('/add-account')} 
           />
           <QuickActionCard 
             icon={<SettingsIcon size={24} />} 
             title="Gestion" 
             subtitle="Liste des comptes"
-            onClick={() => setView('manage-accounts')} 
+            onClick={() => navigate('/manage-accounts')} 
           />
           <QuickActionCard 
             icon={<Tv size={24} />} 
             title="Live TV" 
             subtitle="Chaînes en direct"
-            onClick={() => setView('manage-accounts')} 
+            onClick={() => navigate('/manage-accounts')} 
           />
           <QuickActionCard 
             icon={<Film size={24} />} 
             title="VOD & Séries" 
             subtitle="Cinéma à la demande"
-            onClick={() => setView('manage-accounts')} 
+            onClick={() => navigate('/manage-accounts')} 
           />
         </div>
       </div>

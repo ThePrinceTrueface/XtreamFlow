@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
+import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import { CheckCircle2, Minus, Square, X } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from './db';
@@ -50,7 +51,8 @@ const TitleBar: React.FC = () => {
 // --- Main App Shell ---
 
 export default function App() {
-  const [activeView, setActiveView] = useState<ViewState>('dashboard');
+  const navigate = useNavigate();
+  const location = useLocation();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [playingDownload, setPlayingDownload] = useState<{ url: string, title: string, type: 'live' | 'vod' | 'series' } | null>(null);
   
@@ -115,12 +117,12 @@ export default function App() {
       let type: 'live' | 'vod' | 'series' = stream.type;
 
       setSelectedAccount(account);
-      setActiveView('account-detail');
       setAccountInitialTab(stream.type === 'live' ? 'live' : stream.type === 'movie' ? 'vod' : 'series');
       setPreselectedItemId(stream.stream_id || stream.series_id);
       setPreselectedItemType(stream.type);
       setPreselectedEpisodeId(stream.episode_num?.toString());
       setPreselectedSeason(stream.season?.toString());
+      navigate(`/account/${account.id}`);
     } else if (result.type === 'epg') {
       const prog = result.data;
       const account = await db.accounts.get(prog.accountId);
@@ -128,7 +130,7 @@ export default function App() {
         setAccountInitialTab('live');
         setPreselectedChannelId(prog.stream_id);
         setSelectedAccount(account);
-        setActiveView('account-detail');
+        navigate(`/account/${account.id}`);
         setToast({ message: `Programme: ${prog.title}. Allez dans l'onglet Live pour le voir.`, show: true });
         setTimeout(() => setToast({ message: '', show: false }), 4000);
       }
@@ -237,7 +239,7 @@ export default function App() {
             `The account "${account.name}" has been successfully ${editingAccount ? 'updated' : 'added'}.`,
             () => {
                setEditingAccount(null);
-               setActiveView('manage-accounts');
+               navigate('/accounts');
             },
             "OK"
           );
@@ -265,7 +267,7 @@ export default function App() {
         await db.clearAccountData(id);
         if (editingAccount?.id === id) {
           setEditingAccount(null);
-          setActiveView('manage-accounts');
+          navigate('/manage-accounts');
         }
       },
       'Delete',
@@ -275,12 +277,12 @@ export default function App() {
 
   const startEditing = (account: XtreamAccount) => {
     setEditingAccount(account);
-    setActiveView('edit-account');
+    navigate('/edit-account');
   };
 
   const cancelEditing = () => {
     setEditingAccount(null);
-    setActiveView('manage-accounts');
+    navigate('/manage-accounts');
   };
 
   // --- Server Library Logic ---
@@ -304,39 +306,12 @@ export default function App() {
 
   const handleAddAccountFromServer = (server: SavedServer) => {
       setServerToPrefill(server);
-      setActiveView('add-account');
+      navigate('/add-account');
   };
 
   const handleViewServerAccounts = (server: SavedServer) => {
       setInitialSearchQuery(server.host);
-      setActiveView('manage-accounts');
-  };
-
-  // --- Navigation Logic ---
-
-  const handleSetView = (view: ViewState) => {
-    if (view !== 'edit-account') {
-      setEditingAccount(null);
-    }
-    // If we leave account detail, clear selection
-    if (view !== 'account-detail') {
-      setSelectedAccount(null);
-    }
-    // Clear prefill server if leaving add-account or explicitly changing views
-    if (view !== 'add-account') {
-        setServerToPrefill(null);
-    }
-    // Clear search query if explicitly navigating to list (not from Server Library redirection)
-    if (view !== 'manage-accounts' && activeView !== 'server-library') {
-        setInitialSearchQuery('');
-    }
-    
-    setActiveView(view);
-  };
-
-  const handleSelectAccount = (account: XtreamAccount) => {
-    setSelectedAccount(account);
-    setActiveView('account-detail');
+      navigate('/manage-accounts');
   };
 
   // --- Import / Export Logic ---
@@ -434,16 +409,35 @@ export default function App() {
     );
   };
 
+  // Helper to determine active view for Sidebar
+  const getActiveViewForSidebar = () => {
+    const path = location.pathname;
+    if (path === '/' || path === '/dashboard') return 'dashboard';
+    if (path === '/add-account') return 'add-account';
+    if (path.startsWith('/manage-accounts') || path === '/edit-account') return 'manage-accounts';
+    if (path === '/server-library') return 'server-library';
+    if (path === '/downloads') return 'downloads';
+    if (path === '/settings') return 'settings';
+    if (path.startsWith('/account/')) return 'account-detail';
+    return 'dashboard';
+  };
+
+  const handleSelectAccount = (account: XtreamAccount) => {
+    setSelectedAccount(account);
+    navigate(`/account/${account.id}`);
+  };
+
   return (
     <AcrylicPanel>
       {/* Window Title Bar */}
       <TitleBar />
 
       <div className="flex flex-1 overflow-hidden relative">
-        {activeView === 'account-detail' && selectedAccount ? (
-           <AccountDetailView 
+        <Routes>
+          <Route path="/account/:accountId/*" element={
+            <AccountDetailView 
               account={selectedAccount} 
-              onBack={() => handleSetView('manage-accounts')} 
+              onBack={() => navigate('/manage-accounts')} 
               onPlayDownload={(url, title, type) => setPlayingDownload({ url, title, type })}
               onOpenSearch={() => setIsGlobalSearchOpen(true)}
               initialTab={accountInitialTab}
@@ -452,81 +446,86 @@ export default function App() {
               preselectedItemType={preselectedItemType}
               preselectedEpisodeId={preselectedEpisodeId}
               preselectedSeason={preselectedSeason}
-           />
-        ) : (
-          <>
-            <Sidebar 
-              activeView={activeView === 'edit-account' ? 'manage-accounts' : activeView} 
-              setView={handleSetView} 
-              isCollapsed={isSidebarCollapsed}
-              onToggle={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-              onOpenSearch={() => setIsGlobalSearchOpen(true)}
             />
-            
-            <main className={`flex-1 overflow-y-auto relative scroll-smooth bg-transparent transition-all duration-300 ${activeView === 'downloads' ? 'p-0' : 'p-6 md:p-8'}`}>
-              {activeView === 'dashboard' && <Dashboard accounts={accounts} setView={handleSetView} />}
+          } />
+          <Route path="*" element={
+            <>
+              <Sidebar 
+                activeView={getActiveViewForSidebar() as ViewState} 
+                setView={(view) => navigate(`/${view}`)} 
+                isCollapsed={isSidebarCollapsed}
+                onToggle={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+                onOpenSearch={() => setIsGlobalSearchOpen(true)}
+              />
               
-              {activeView === 'add-account' && (
-                <AddAccount 
-                    onSave={handleSaveAccount} 
-                    onCancel={() => handleSetView('dashboard')} 
-                    savedServers={savedServers}
-                    prefillServer={serverToPrefill}
-                />
-              )}
+              <main className={`flex-1 overflow-y-auto relative scroll-smooth bg-transparent transition-all duration-300 ${location.pathname === '/downloads' ? 'p-0' : 'p-6 md:p-8'}`}>
+                <Routes>
+                  <Route path="/" element={<Dashboard accounts={accounts} setView={(view) => navigate(`/${view}`)} />} />
+                  <Route path="/dashboard" element={<Dashboard accounts={accounts} setView={(view) => navigate(`/${view}`)} />} />
+                  
+                  <Route path="/add-account" element={
+                    <AddAccount 
+                        onSave={handleSaveAccount} 
+                        onCancel={() => navigate('/dashboard')} 
+                        savedServers={savedServers}
+                        prefillServer={serverToPrefill}
+                    />
+                  } />
 
-              {activeView === 'edit-account' && (
-                <AddAccount 
-                  onSave={handleSaveAccount} 
-                  initialData={editingAccount} 
-                  onCancel={cancelEditing} 
-                  onDelete={deleteAccount}
-                  savedServers={savedServers}
-                />
-              )}
+                  <Route path="/edit-account" element={
+                    <AddAccount 
+                      onSave={handleSaveAccount} 
+                      initialData={editingAccount} 
+                      onCancel={cancelEditing} 
+                      onDelete={deleteAccount}
+                      savedServers={savedServers}
+                    />
+                  } />
 
-              {activeView === 'manage-accounts' && (
-                <AccountList 
-                  accounts={accounts} 
-                  onDelete={deleteAccount} 
-                  onEdit={startEditing}
-                  onToggleFavorite={toggleFavorite}
-                  showToast={handleToast}
-                  onOpenAdvancedSearch={() => {}}
-                  onSelect={handleSelectAccount}
-                  onUpdate={(acc) => handleSaveAccount(acc, true)}
-                  initialQuery={initialSearchQuery}
-                />
-              )}
+                  <Route path="/manage-accounts" element={
+                    <AccountList 
+                      accounts={accounts} 
+                      onDelete={deleteAccount} 
+                      onEdit={startEditing}
+                      onToggleFavorite={toggleFavorite}
+                      showToast={handleToast}
+                      onOpenAdvancedSearch={() => {}}
+                      onSelect={handleSelectAccount}
+                      onUpdate={(acc) => handleSaveAccount(acc, true)}
+                      initialQuery={initialSearchQuery}
+                    />
+                  } />
 
-              {activeView === 'server-library' && (
-                  <ServerLibrary 
-                      servers={savedServers} 
-                      onSave={handleSaveServer} 
-                      onDelete={handleDeleteServer}
-                      onAddAccount={handleAddAccountFromServer}
-                      onViewAccounts={handleViewServerAccounts}
-                  />
-              )}
-              
-              {activeView === 'settings' && (
-                <SettingsView 
-                    accounts={accounts} 
-                    onImport={handleImportData} 
-                    onExport={handleExportData}
-                    accentColor={accentColor}
-                    onAccentColorChange={setAccentColor}
-                />
-              )}
+                  <Route path="/server-library" element={
+                      <ServerLibrary 
+                          servers={savedServers} 
+                          onSave={handleSaveServer} 
+                          onDelete={handleDeleteServer}
+                          onAddAccount={handleAddAccountFromServer}
+                          onViewAccounts={handleViewServerAccounts}
+                      />
+                  } />
+                  
+                  <Route path="/settings" element={
+                    <SettingsView 
+                        accounts={accounts} 
+                        onImport={handleImportData} 
+                        onExport={handleExportData}
+                        accentColor={accentColor}
+                        onAccentColorChange={setAccentColor}
+                    />
+                  } />
 
-              {activeView === 'downloads' && (
-                <DownloadManager 
-                  onPlay={(url, title, type) => setPlayingDownload({ url, title, type })}
-                />
-              )}
-            </main>
-          </>
-        )}
+                  <Route path="/downloads" element={
+                    <DownloadManager 
+                      onPlay={(url, title, type) => setPlayingDownload({ url, title, type })}
+                    />
+                  } />
+                </Routes>
+              </main>
+            </>
+          } />
+        </Routes>
 
         {playingDownload && (
           <VideoPlayer 

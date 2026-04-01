@@ -5,6 +5,7 @@ import { XtreamAccount, SearchCriteria } from '../types';
 import { Button } from '../components/Win11UI';
 import { AdvancedSearchModal } from '../components/AdvancedSearchModal';
 import { checkConnection } from '../utils';
+import { useNavigate } from 'react-router-dom';
 
 export const AccountList: React.FC<{ 
   accounts: XtreamAccount[]; 
@@ -17,6 +18,7 @@ export const AccountList: React.FC<{
   onUpdate: (account: XtreamAccount) => void;
   initialQuery?: string;
 }> = ({ accounts, onDelete, onEdit, onToggleFavorite, showToast, onSelect, onUpdate, initialQuery = '' }) => {
+  const navigate = useNavigate();
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [testingId, setTestingId] = useState<string | null>(null);
   const [searchCriteria, setSearchCriteria] = useState<SearchCriteria>({
@@ -244,7 +246,10 @@ export const AccountList: React.FC<{
                     
                     {/* Primary Action Button */}
                     <Button 
-                      onClick={() => onSelect(acc)}
+                      onClick={() => {
+                        onSelect(acc);
+                        navigate(`/account/${acc.id}`);
+                      }}
                       className={`!px-3 !py-1.5 text-xs bg-green-500/20 text-green-400 border border-green-500/30 hover:bg-green-500/30 font-semibold shadow-sm
                           ${viewMode === 'grid' ? 'flex-1 h-9' : ''}`}
                     >
@@ -273,7 +278,10 @@ export const AccountList: React.FC<{
                         <Button 
                         variant="secondary" 
                         className="!px-2 !py-1.5 text-xs"
-                        onClick={() => onEdit(acc)}
+                        onClick={() => {
+                          onEdit(acc);
+                          navigate('/edit-account');
+                        }}
                         >
                         <Pencil size={14} />
                         </Button>

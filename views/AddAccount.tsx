@@ -4,6 +4,7 @@ import { Link as LinkIcon, Star, Tag, X, Trash2, AlertCircle, Server, ChevronDow
 import { XtreamAccount, SavedServer } from '../types';
 import { Card, Button, Input } from '../components/Win11UI';
 import { parseXtreamUrl, generateId, checkConnection } from '../utils';
+import { useNavigate } from 'react-router-dom';
 
 export const AddAccount: React.FC<{ 
   onSave: (account: XtreamAccount) => void; 
@@ -13,6 +14,7 @@ export const AddAccount: React.FC<{
   savedServers?: SavedServer[];
   prefillServer?: SavedServer | null;
 }> = ({ onSave, initialData, onCancel, onDelete, savedServers = [], prefillServer = null }) => {
+  const navigate = useNavigate();
   const [mode, setMode] = useState<'url' | 'manual'>('url');
   const [urlInput, setUrlInput] = useState('');
   
@@ -172,6 +174,9 @@ export const AddAccount: React.FC<{
       setTags([]);
       setCurrentStatus('untested');
       setTestResult(null);
+      navigate('/accounts');
+    } else {
+      navigate(-1);
     }
   };
 
@@ -356,7 +361,10 @@ export const AddAccount: React.FC<{
                      <Button 
                        variant="ghost" 
                        className="text-red-400 hover:bg-red-500/10 hover:text-red-300 px-2"
-                       onClick={() => onDelete(initialData.id)}
+                       onClick={() => {
+                         onDelete(initialData.id);
+                         navigate('/accounts');
+                       }}
                      >
                        <Trash2 size={16} /> Delete
                      </Button>
@@ -364,7 +372,7 @@ export const AddAccount: React.FC<{
                 </div>
 
                 <div className="flex gap-2">
-                    <Button variant="ghost" onClick={initialData ? onCancel : () => setMode('url')}>
+                    <Button variant="ghost" onClick={initialData ? () => navigate(-1) : () => setMode('url')}>
                       {initialData ? 'Cancel' : 'Back'}
                     </Button>
                     <Button variant="secondary" onClick={handleTestConnection} disabled={isTesting}>

@@ -8,6 +8,7 @@ import { AccountSidebar } from '../../components/Sidebars';
 import { CategoryBrowser } from './CategoryBrowser';
 import { DownloadManager } from './components/DownloadManager';
 import { cacheService } from '../../src/services/cacheService';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 
 interface RevisionResults {
   userInfo: any;
@@ -28,16 +29,31 @@ interface SpeedTestMetrics {
     error?: string;
 }
 
-export const AccountDetailView: React.FC<{ account: XtreamAccount; onBack: () => void; onPlayDownload?: (url: string, title: string, type: 'vod' | 'series') => void; onOpenSearch?: () => void; initialTab?: string; preselectedChannelId?: string; preselectedItemId?: string; preselectedItemType?: string; preselectedEpisodeId?: string; preselectedSeason?: string }> = ({ account, onBack, onPlayDownload, onOpenSearch, initialTab, preselectedChannelId, preselectedItemId, preselectedItemType, preselectedEpisodeId, preselectedSeason }) => {
-  const [activeTab, setActiveTab] = useState(initialTab || 'info');
-  const [visitedTabs, setVisitedTabs] = useState<Set<string>>(new Set([initialTab || 'info']));
+export const AccountDetailView: React.FC<{ account: XtreamAccount | null; onBack: () => void; onPlayDownload?: (url: string, title: string, type: 'vod' | 'series') => void; onOpenSearch?: () => void; initialTab?: string; preselectedChannelId?: string; preselectedItemId?: string; preselectedItemType?: string; preselectedEpisodeId?: string; preselectedSeason?: string }> = ({ account, onBack, onPlayDownload, onOpenSearch, initialTab, preselectedChannelId, preselectedItemId, preselectedItemType, preselectedEpisodeId, preselectedSeason }) => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { accountId } = useParams<{ accountId: string }>();
+  
+  // Determine active tab from URL or fallback
+  const currentPath = location.pathname.split('/');
+  const tabFromUrl = currentPath.length > 3 ? currentPath[3] : undefined;
+  
+  const [activeTab, setActiveTab] = useState(tabFromUrl || initialTab || 'info');
+  const [visitedTabs, setVisitedTabs] = useState<Set<string>>(new Set([tabFromUrl || initialTab || 'info']));
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   
   useEffect(() => {
-    if (initialTab) {
+    if (tabFromUrl) {
+      setActiveTab(tabFromUrl);
+    } else if (initialTab) {
       setActiveTab(initialTab);
     }
-  }, [initialTab]);
+  }, [tabFromUrl, initialTab]);
+  
+  const handleTabChange = (tab: string) => {
+    setActiveTab(tab);
+    navigate(`/account/${accountId}/${tab}`);
+  };
   
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -103,11 +119,13 @@ export const AccountDetailView: React.FC<{ account: XtreamAccount; onBack: () =>
   }, [account]);
 
   const buildApiUrl = (action: string) => {
+    if (!account) return '';
     const targetUrl = `${account.protocol}://${account.host}:${account.port}/player_api.php?username=${account.username}&password=${account.password}&action=${action}`;
     return createProxyUrl(targetUrl);
   };
 
   const fetchAccountInfo = async () => {
+    if (!account) return;
     setLoading(true);
     setError(null);
     const targetUrl = `${account.protocol}://${account.host}:${account.port}/player_api.php?username=${account.username}&password=${account.password}`;
@@ -137,6 +155,7 @@ export const AccountDetailView: React.FC<{ account: XtreamAccount; onBack: () =>
 
   // --- TOOL LOGIC: Complete Revision ---
   const runRevision = async () => {
+      if (!account) return;
       setIsRevisionModalOpen(true);
       setRevisionResults(null);
       setRevisionProgress({ step: 'Initializing...', percent: 0 });
@@ -192,6 +211,7 @@ export const AccountDetailView: React.FC<{ account: XtreamAccount; onBack: () =>
 
   // --- TOOL LOGIC: Bandwidth Test ---
   const runSpeedTest = async () => {
+    if (!account) return;
     setIsSpeedModalOpen(true);
     setSpeedMetrics({
         ping: 0,
@@ -282,6 +302,17 @@ export const AccountDetailView: React.FC<{ account: XtreamAccount; onBack: () =>
       return { label: 'READY FOR 4K UHD', color: 'bg-green-500/10 text-green-400 border-green-500/20' };
   }, [speedMetrics.downloadSpeed]);
 
+  if (!account) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full text-center p-8">
+         <AlertCircle size={48} className="text-fluent-danger mb-4" />
+         <h3 className="text-xl font-semibold mb-2">Account Not Found</h3>
+         <p className="text-fluent-subtext mb-6 max-w-md">The requested account could not be found.</p>
+         <Button onClick={onBack}>Go Back</Button>
+      </div>
+    );
+  }
+
   // --- RENDERERS ---
 
   const renderInfoTab = () => {
@@ -289,7 +320,7 @@ export const AccountDetailView: React.FC<{ account: XtreamAccount; onBack: () =>
       return (
         <div className="flex flex-col items-center justify-center h-full">
           <RefreshCw className="animate-spin mb-4 text-fluent-accent" size={32} />
-          <p className="text-fluent-subtext">Connecting to {account.host}...</p>
+          <p className="text-fluent-subtext">Connecting to {account?.host}...</p>
         </div>
       );
     }
@@ -487,9 +518,9 @@ export const AccountDetailView: React.FC<{ account: XtreamAccount; onBack: () =>
     <div className="flex h-full w-full overflow-hidden">
       <AccountSidebar 
         activeTab={activeTab} 
-        setTab={setActiveTab} 
+        setTab={handleTabChange} 
         onBack={onBack}
-        accountName={account.name}
+        accountName={account?.name || ''}
         isCollapsed={isSidebarCollapsed}
         onToggle={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
         onOpenSearch={onOpenSearch}
@@ -515,25 +546,25 @@ export const AccountDetailView: React.FC<{ account: XtreamAccount; onBack: () =>
          )}
 
          {/* Category Browsers */}
-         {visitedTabs.has('live') && (
+         {visitedTabs.has('live') && account && (
             <div className="w-full h-full" style={{ display: activeTab === 'live' ? 'block' : 'none' }}>
                 <CategoryBrowser account={account} type="live" preselectedChannelId={preselectedChannelId} preselectedItemId={preselectedItemId} preselectedItemType={preselectedItemType} />
             </div>
          )}
 
-         {visitedTabs.has('vod') && (
+         {visitedTabs.has('vod') && account && (
             <div className="w-full h-full" style={{ display: activeTab === 'vod' ? 'block' : 'none' }}>
                 <CategoryBrowser account={account} type="vod" preselectedItemId={preselectedItemId} preselectedItemType={preselectedItemType} preselectedEpisodeId={preselectedEpisodeId} preselectedSeason={preselectedSeason} />
             </div>
          )}
 
-         {visitedTabs.has('series') && (
+         {visitedTabs.has('series') && account && (
             <div className="w-full h-full" style={{ display: activeTab === 'series' ? 'block' : 'none' }}>
                 <CategoryBrowser account={account} type="series" preselectedItemId={preselectedItemId} preselectedItemType={preselectedItemType} preselectedEpisodeId={preselectedEpisodeId} preselectedSeason={preselectedSeason} />
             </div>
          )}
 
-         {visitedTabs.has('downloads') && (
+         {visitedTabs.has('downloads') && account && (
             <div className="w-full h-full" style={{ display: activeTab === 'downloads' ? 'block' : 'none' }}>
                 <DownloadManager accountId={account.id} onPlay={onPlayDownload} />
             </div>

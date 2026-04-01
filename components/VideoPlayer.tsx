@@ -279,12 +279,14 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
         setIsLoading(false);
         setIsRetrying(false);
-        
-        // Load audio tracks
-        if (hls.audioTracks && hls.audioTracks.length > 0) {
-            const tracks = hls.audioTracks.map((t, index) => ({
+        attemptPlay();
+      });
+
+      hls.on(Hls.Events.AUDIO_TRACKS_UPDATED, (event, data) => {
+        if (data.audioTracks && data.audioTracks.length > 0) {
+            const tracks = data.audioTracks.map((t, index) => ({
                 id: index,
-                name: t.name || `Track ${index + 1}`,
+                name: t.name || `Piste ${index + 1}`,
                 lang: t.lang || ''
             }));
             setAudioTracks(tracks);
@@ -296,7 +298,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                     t.lang.toLowerCase().includes(prefLang) || 
                     t.name.toLowerCase().includes(prefLang)
                 );
-                if (matchIndex !== -1) {
+                if (matchIndex !== -1 && hls.audioTrack !== matchIndex) {
                     hls.audioTrack = matchIndex;
                     setCurrentAudioTrack(matchIndex);
                 } else {
@@ -306,8 +308,6 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                 setCurrentAudioTrack(hls.audioTrack);
             }
         }
-
-        attemptPlay();
       });
 
       hls.on(Hls.Events.AUDIO_TRACK_SWITCHED, (event, data) => {
@@ -835,25 +835,28 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                                 <div className="absolute bottom-full right-0 mb-4 w-48 bg-[#1e1e1e] border border-white/10 rounded-xl shadow-2xl p-4 z-50 animate-in slide-in-from-bottom-2">
                                     <h4 className="text-xs font-bold text-white/50 uppercase tracking-widest mb-3">Pistes Audio</h4>
                                     <div className="space-y-1 max-h-48 overflow-y-auto custom-scrollbar">
-                                        {audioTracks.map((track) => (
-                                            <button
-                                                key={track.id}
-                                                onClick={() => {
-                                                    if (hlsRef.current) {
-                                                        hlsRef.current.audioTrack = track.id;
-                                                        setCurrentAudioTrack(track.id);
-                                                    }
-                                                    setShowAudioMenu(false);
-                                                }}
-                                                className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors flex items-center justify-between
-                                                    ${currentAudioTrack === track.id 
-                                                        ? 'bg-fluent-accent text-black font-bold' 
-                                                        : 'text-white/80 hover:bg-white/5'}`}
-                                            >
-                                                <span className="truncate">{track.name || track.lang || `Piste ${track.id + 1}`}</span>
-                                                {currentAudioTrack === track.id && <div className="w-1.5 h-1.5 rounded-full bg-black shrink-0 ml-2" />}
-                                            </button>
-                                        ))}
+                                        {audioTracks.map((track) => {
+                                            const isSelected = currentAudioTrack === track.id || (currentAudioTrack === -1 && track.id === 0);
+                                            return (
+                                                <button
+                                                    key={track.id}
+                                                    onClick={() => {
+                                                        if (hlsRef.current) {
+                                                            hlsRef.current.audioTrack = track.id;
+                                                            setCurrentAudioTrack(track.id);
+                                                        }
+                                                        setShowAudioMenu(false);
+                                                    }}
+                                                    className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors flex items-center justify-between
+                                                        ${isSelected 
+                                                            ? 'bg-fluent-accent text-black font-bold' 
+                                                            : 'text-white/80 hover:bg-white/5'}`}
+                                                >
+                                                    <span className="truncate">{track.name || track.lang || `Piste ${track.id + 1}`}</span>
+                                                    {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-black shrink-0 ml-2" />}
+                                                </button>
+                                            );
+                                        })}
                                     </div>
                                 </div>
                             )}
