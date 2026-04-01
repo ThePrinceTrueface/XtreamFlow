@@ -34,15 +34,6 @@ interface CategoryBrowserProps {
 export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type, preselectedChannelId, preselectedItemId, preselectedItemType, preselectedEpisodeId, preselectedSeason }) => {
   // ...
   
-  // Handle preselected item
-  useEffect(() => {
-    if (preselectedItemId && preselectedItemType === type && fullData.length > 0) {
-        const item = fullData.find(i => (i.stream_id?.toString() === preselectedItemId || i.series_id?.toString() === preselectedItemId));
-        if (item) {
-            handleDetail(item);
-        }
-    }
-  }, [preselectedItemId, preselectedItemType, type, fullData, handleDetail]);
   // Navigation & UI State
   const [uiMode, setUiMode] = useState<'normal' | 'flow'>(() => (localStorage.getItem('category_ui_mode') as 'normal' | 'flow') || 'normal');
   const [viewMode, setViewMode] = useState<'grid' | 'epg'>('grid'); // New state for EPG toggle
@@ -467,6 +458,17 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
       }).catch(() => setLoading(false));
   }, [account, type]);
 
+  const handleDetail = useCallback((item: XtreamStream) => {
+        if (currentLevel === 'detail' && selectedItem) {
+            setHistoryStack(prev => [...prev, selectedItem]);
+        } else {
+            setHistoryStack([]);
+        }
+        setSelectedItem(item);
+        setCurrentLevel('detail');
+        fetchAndSetDetail(item);
+  }, [currentLevel, selectedItem, fetchAndSetDetail]);
+
   const handlePlay = useCallback((item: XtreamStream) => {
     const baseUrl = `${account.protocol}://${account.host}:${account.port}`;
     if (type === 'live') {
@@ -517,16 +519,7 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
       });
   }, [account, selectedItem]);
 
-  const handleDetail = useCallback((item: XtreamStream) => {
-        if (currentLevel === 'detail' && selectedItem) {
-            setHistoryStack(prev => [...prev, selectedItem]);
-        } else {
-            setHistoryStack([]);
-        }
-        setSelectedItem(item);
-        setCurrentLevel('detail');
-        fetchAndSetDetail(item);
-  }, [currentLevel, selectedItem, fetchAndSetDetail]);
+
 
   const handleNavigateBack = useCallback(() => {
       if (historyStack.length > 0) {
