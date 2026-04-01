@@ -185,6 +185,7 @@ export const AccountDetailView: React.FC<{ account: XtreamAccount; onBack: () =>
           setRevisionResults(results);
 
       } catch (e: any) {
+          console.error("Error during revision:", e);
           setRevisionProgress({ step: 'Error Occurred', percent: 100, details: e.message || "Failed to complete revision." });
       }
   };
@@ -267,6 +268,7 @@ export const AccountDetailView: React.FC<{ account: XtreamAccount; onBack: () =>
         setSpeedMetrics(prev => ({ ...prev, status: 'complete', progress: 100 }));
 
     } catch (e: any) {
+        console.error("Error during speed test:", e);
         setSpeedMetrics(prev => ({ ...prev, status: 'error', error: e.message || "Connection failed during test." }));
     }
   };

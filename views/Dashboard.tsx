@@ -48,6 +48,7 @@ export const Dashboard: React.FC<{ accounts: XtreamAccount[]; setView: (v: ViewS
         favorites: favorites.slice(0, 12)
       };
     } catch (e) {
+      console.error("Error aggregating dashboard data:", e);
       return { history: [], favorites: [] };
     }
   }, [accounts]);

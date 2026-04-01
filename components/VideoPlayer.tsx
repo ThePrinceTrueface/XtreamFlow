@@ -105,6 +105,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
             const proxyUrl = createProxyUrl(apiUrl);
             
             const res = await fetch(proxyUrl);
+            if (!res.ok) throw new Error(`HTTP Error: ${res.status}`);
             const data = await res.json();
 
             if (data && data.epg_listings && Array.isArray(data.epg_listings)) {
@@ -403,10 +404,14 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
-      containerRef.current?.requestFullscreen();
+      containerRef.current?.requestFullscreen().catch(err => {
+        console.error(`Error attempting to enable fullscreen: ${err.message}`);
+      });
       setIsFullscreen(true);
     } else {
-      document.exitFullscreen();
+      document.exitFullscreen().catch(err => {
+        console.error(`Error attempting to exit fullscreen: ${err.message}`);
+      });
       setIsFullscreen(false);
     }
   };

@@ -25,6 +25,7 @@ export const DownloadManager = ({ onClose, onPlay, accountId }: { onClose?: () =
       onPlay(url, item.name, item.type === 'movie' ? 'vod' : 'series');
     } catch (error) {
       console.error("Failed to play downloaded file", error);
+      alert("Impossible de lire le fichier téléchargé. Il a peut-être été déplacé ou supprimé.");
     }
   };
 

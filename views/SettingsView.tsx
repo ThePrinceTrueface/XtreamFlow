@@ -81,10 +81,16 @@ export const SettingsView: React.FC<{
                 const json = JSON.parse(e.target?.result as string);
                 onImport(json);
             } catch (err) {
-                alert("Invalid JSON");
+                console.error("Invalid JSON file:", err);
+                alert("Le fichier sélectionné n'est pas un fichier JSON valide.");
             } finally {
                 setIsProcessing(false);
             }
+        };
+        reader.onerror = (e) => {
+            console.error("Error reading file:", e);
+            alert("Erreur lors de la lecture du fichier.");
+            setIsProcessing(false);
         };
         reader.readAsText(fileObj);
     }

@@ -40,25 +40,36 @@ export class CacheService {
     const action = type === 'live' ? 'get_live_categories' : type === 'vod' ? 'get_vod_categories' : 'get_series_categories';
     const url = this.buildApiUrl(account, action);
     
-    const response = await fetch(url);
-    if (!response.ok) throw new Error('Failed to fetch categories');
-    const data = await response.json();
+    try {
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`Failed to fetch categories: ${response.statusText}`);
+      const data = await response.json();
 
-    if (Array.isArray(data)) {
-      // Clear old categories for this type
-      await db.categories
+      if (Array.isArray(data)) {
+        // Clear old categories for this type
+        await db.categories
+          .where('[accountId+type]')
+          .equals([account.id, type])
+          .delete();
+
+        const toCache = data.map(cat => ({
+          ...cat,
+          accountId: account.id,
+          type
+        }));
+        
+        await db.categories.bulkAdd(toCache);
+        return toCache;
+      }
+    } catch (error) {
+      console.error('Error fetching categories:', error);
+      // Fallback to cache if fetch fails even on forceRefresh
+      const cached = await db.categories
         .where('[accountId+type]')
         .equals([account.id, type])
-        .delete();
-
-      const toCache = data.map(cat => ({
-        ...cat,
-        accountId: account.id,
-        type
-      }));
-      
-      await db.categories.bulkAdd(toCache);
-      return toCache;
+        .toArray();
+      if (cached.length > 0) return cached;
+      throw error;
     }
 
     return [];
@@ -84,33 +95,47 @@ export class CacheService {
     if (categoryId) params.category_id = categoryId;
     
     const url = this.buildApiUrl(account, action, params);
-    const response = await fetch(url);
-    if (!response.ok) throw new Error('Failed to fetch streams');
-    const data = await response.json();
+    try {
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`Failed to fetch streams: ${response.statusText}`);
+      const data = await response.json();
 
-    if (Array.isArray(data)) {
-      // If we fetched a specific category, only clear that category
-      if (categoryId) {
-        await db.streams
-          .where('[accountId+type+category_id]')
-          .equals([account.id, type, categoryId])
-          .delete();
-      } else {
-        // If we fetched all, clear all for this type
-        await db.streams
-          .where('[accountId+type]')
-          .equals([account.id, type])
-          .delete();
+      if (Array.isArray(data)) {
+        // If we fetched a specific category, only clear that category
+        if (categoryId) {
+          await db.streams
+            .where('[accountId+type+category_id]')
+            .equals([account.id, type, categoryId])
+            .delete();
+        } else {
+          // If we fetched all, clear all for this type
+          await db.streams
+            .where('[accountId+type]')
+            .equals([account.id, type])
+            .delete();
+        }
+
+        const toCache = data.map(stream => ({
+          ...stream,
+          accountId: account.id,
+          type: type === 'live' ? 'live' : type === 'vod' ? 'movie' : 'series'
+        }));
+        
+        await db.streams.bulkAdd(toCache);
+        return toCache;
       }
-
-      const toCache = data.map(stream => ({
-        ...stream,
-        accountId: account.id,
-        type: type === 'live' ? 'live' : type === 'vod' ? 'movie' : 'series'
-      }));
-      
-      await db.streams.bulkAdd(toCache);
-      return toCache;
+    } catch (error) {
+      console.error('Error fetching streams:', error);
+      // Fallback to cache if fetch fails
+      let query;
+      if (categoryId) {
+        query = db.streams.where('[accountId+type+category_id]').equals([account.id, type, categoryId]);
+      } else {
+        query = db.streams.where('[accountId+type]').equals([account.id, type]);
+      }
+      const cached = await query.toArray();
+      if (cached.length > 0) return cached;
+      throw error;
     }
 
     return [];
@@ -131,36 +156,50 @@ export class CacheService {
     }
 
     const url = this.buildApiUrl(account, 'get_short_epg', { stream_id: streamId, limit: '10' });
-    const response = await fetch(url);
-    if (!response.ok) throw new Error('Failed to fetch EPG');
-    const data = await response.json();
+    try {
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`Failed to fetch EPG: ${response.statusText}`);
+      const data = await response.json();
 
-    if (data && data.epg_listings && Array.isArray(data.epg_listings)) {
-      const decodedListings = data.epg_listings.map((p: any) => {
-        let start = p.start_timestamp;
-        let end = p.stop_timestamp;
-        if (start < 10000000000) start *= 1000;
-        if (end < 10000000000) end *= 1000;
+      if (data && data.epg_listings && Array.isArray(data.epg_listings)) {
+        const decodedListings = data.epg_listings.map((p: any) => {
+          let start = p.start_timestamp;
+          let end = p.stop_timestamp;
+          if (start < 10000000000) start *= 1000;
+          if (end < 10000000000) end *= 1000;
 
-        return {
-          ...p,
-          accountId: account.id,
-          channel_id: streamId,
-          title: decodeBase64(p.title),
-          description: decodeBase64(p.description),
-          start_timestamp: start,
-          stop_timestamp: end
-        };
-      });
+          return {
+            ...p,
+            accountId: account.id,
+            channel_id: streamId,
+            title: decodeBase64(p.title),
+            description: decodeBase64(p.description),
+            start_timestamp: start,
+            stop_timestamp: end
+          };
+        });
 
-      // Clear old EPG for this channel
-      await db.epg
+        // Clear old EPG for this channel
+        await db.epg
+          .where('[accountId+channel_id]')
+          .equals([account.id, streamId])
+          .delete();
+
+        await db.epg.bulkAdd(decodedListings);
+        return decodedListings.sort((a: any, b: any) => a.start_timestamp - b.start_timestamp);
+      }
+    } catch (error) {
+      console.error('Error fetching EPG:', error);
+      // Fallback to cache if fetch fails
+      const now = Date.now();
+      const cached = await db.epg
         .where('[accountId+channel_id]')
         .equals([account.id, streamId])
-        .delete();
-
-      await db.epg.bulkAdd(decodedListings);
-      return decodedListings.sort((a: any, b: any) => a.start_timestamp - b.start_timestamp);
+        .filter(p => p.stop_timestamp > now)
+        .toArray();
+      if (cached.length > 0) return cached.sort((a, b) => a.start_timestamp - b.start_timestamp);
+      // Don't throw for EPG, just return empty to not break the UI
+      return [];
     }
 
     return [];
@@ -171,22 +210,33 @@ export class CacheService {
     const paramKey = type === 'vod' ? 'vod_id' : 'series_id';
     const url = this.buildApiUrl(account, action, { [paramKey]: id.toString() });
     
-    const response = await fetch(url);
-    if (!response.ok) throw new Error('Failed to fetch stream info');
-    return await response.json();
+    try {
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`Failed to fetch stream info: ${response.statusText}`);
+      return await response.json();
+    } catch (error) {
+      console.error('Error fetching stream info:', error);
+      throw error;
+    }
   }
 
   async prefetchCatalogue(account: XtreamAccount, onProgress?: (step: string, percent: number) => void) {
-    const steps = ['live', 'vod', 'series'];
-    for (let i = 0; i < steps.length; i++) {
-      const type = steps[i] as 'live' | 'vod' | 'series';
-      if (onProgress) onProgress(`Caching ${type} categories...`, (i * 33) + 5);
-      await this.getCategories(account, type, true);
-      
-      if (onProgress) onProgress(`Caching ${type} streams...`, (i * 33) + 20);
-      await this.getStreams(account, type, undefined, true);
+    try {
+      const steps = ['live', 'vod', 'series'];
+      for (let i = 0; i < steps.length; i++) {
+        const type = steps[i] as 'live' | 'vod' | 'series';
+        if (onProgress) onProgress(`Caching ${type} categories...`, (i * 33) + 5);
+        await this.getCategories(account, type, true);
+        
+        if (onProgress) onProgress(`Caching ${type} streams...`, (i * 33) + 20);
+        await this.getStreams(account, type, undefined, true);
+      }
+      if (onProgress) onProgress('Catalogue cached successfully', 100);
+    } catch (error) {
+      console.error('Error prefetching catalogue:', error);
+      if (onProgress) onProgress('Error caching catalogue', 100);
+      throw error;
     }
-    if (onProgress) onProgress('Catalogue cached successfully', 100);
   }
 }
 

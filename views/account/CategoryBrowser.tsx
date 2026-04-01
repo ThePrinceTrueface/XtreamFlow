@@ -362,7 +362,8 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
             setLoading(false);
         }
     } catch (e) { 
-        setError("Erreur de chargement."); 
+        console.error("Error loading categories:", e);
+        setError("Erreur lors du chargement des catégories et des flux."); 
         setLoading(false);
     }
   }, [account, type, uiMode]);
@@ -438,7 +439,8 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
                 setHeroIndex(d.length > 0 ? Math.floor(Math.random() * Math.min(d.length, 50)) : -1);
             }
         } catch (err) {
-            setError("Erreur de filtrage.");
+            console.error("Error filtering category:", err);
+            setError("Erreur lors du chargement de la catégorie.");
         } finally {
             setLoading(false);
         }
@@ -452,10 +454,15 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
       if (!id || type === 'live') return;
 
       setLoading(true);
+      setError(null);
       cacheService.getStreamInfo(account, type as 'vod' | 'series', id).then(res => {
           setDetailData(Array.isArray(res) ? res[0] : res);
           setLoading(false);
-      }).catch(() => setLoading(false));
+      }).catch((err) => {
+          console.error("Error fetching stream info:", err);
+          setError("Erreur lors du chargement des détails.");
+          setLoading(false);
+      });
   }, [account, type]);
 
   const handleDetail = useCallback((item: XtreamStream) => {
