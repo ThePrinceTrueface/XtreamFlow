@@ -457,6 +457,24 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
             // ... (rest of track logic handled by event listeners)
         } catch (e) {
             console.error("Shaka Load Error", e);
+            
+            // Fallback to native HTML5 playback for VODs (MKV, MP4, AVI) if Shaka fails
+            if (video && !finalUrl.includes('.m3u8')) {
+                console.log("Falling back to native HTML5 playback...");
+                try {
+                    await player.unload();
+                    video.src = finalUrl;
+                    video.load();
+                    setIsLoading(false);
+                    setIsRetrying(false);
+                    setError(null);
+                    attemptPlay();
+                    return; // Exit the init function, native playback took over
+                } catch (fallbackError) {
+                    console.error("Native fallback also failed", fallbackError);
+                }
+            }
+
             setIsLoading(true);
             setIsRetrying(true);
             if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
