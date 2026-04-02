@@ -3,19 +3,12 @@ import React, { useEffect, useRef, useState } from 'react';
 import { 
   Play, Pause, Volume2, VolumeX, Maximize, Minimize, X, 
   SkipBack, SkipForward, Settings, List, ChevronLeft, ChevronRight, Square,
-  Expand, Shrink, RefreshCw, Clock, Info, Columns, AudioLines, Captions, Activity,
-  PictureInPicture, Camera, Lock, Unlock
+  Expand, Shrink, RefreshCw, Clock, Info, Columns, AudioLines, Captions
 } from 'lucide-react';
-import shaka from 'shaka-player/dist/shaka-player.compiled';
-import muxjs from 'mux.js';
+import Hls from 'hls.js';
 import { XtreamStream, XtreamAccount } from '../types';
 import { createProxyUrl, decodeBase64 } from '../utils';
 import { useUserPreferences } from '../hooks/useUserPreferences';
-
-// Attach mux.js to window so Shaka Player can find it for TS segments
-if (typeof window !== 'undefined') {
-  (window as any).muxjs = muxjs;
-}
 
 interface VideoPlayerProps {
   url: string;
@@ -67,7 +60,6 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const [isLoading, setIsLoading] = useState(true);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [autoPlayBlocked, setAutoPlayBlocked] = useState(false);
-  const [isPiP, setIsPiP] = useState(false);
   
   // Resume State
   const [resumePoint, setResumePoint] = useState<number | null>(null);
@@ -88,85 +80,16 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const [epgProgress, setEpgProgress] = useState(0);
 
   // Audio Tracks State
-  const shakaPlayerRef = useRef<any>(null);
+  const hlsRef = useRef<Hls | null>(null);
   const [audioTracks, setAudioTracks] = useState<{id: number, name: string, lang: string}[]>([]);
   const [currentAudioTrack, setCurrentAudioTrack] = useState<number>(-1);
   const [showAudioMenu, setShowAudioMenu] = useState(false);
 
-  const [subtitleTracks, setSubtitleTracks] = useState<{id: string, name: string, lang: string}[]>([]);
-  const [currentSubtitleTrack, setCurrentSubtitleTrack] = useState<string>(''); // empty string means disabled
+  const [subtitleTracks, setSubtitleTracks] = useState<{id: number, name: string, lang: string}[]>([]);
+  const [currentSubtitleTrack, setCurrentSubtitleTrack] = useState<number>(-1); // -1 means disabled
   const [showSubtitleMenu, setShowSubtitleMenu] = useState(false);
 
-  // Quality State
-  const [qualityTracks, setQualityTracks] = useState<{id: number, height: number, bitrate: number}[]>([]);
-  const [currentQuality, setCurrentQuality] = useState<number>(-1); // -1 means Auto
-  const [showQualityMenu, setShowQualityMenu] = useState(false);
-
-  // Stats for Nerds State
-  const [showStats, setShowStats] = useState(false);
-  const [isLocked, setIsLocked] = useState(false);
-  const [stats, setStats] = useState({
-    bandwidth: 0,
-    droppedFrames: 0,
-    decodedFrames: 0,
-    bufferHealth: 0,
-    resolution: '',
-    bitrate: 0
-  });
-
   const controlsTimeoutRef = useRef<number | null>(null);
-
-  // Picture-in-Picture Event Listeners
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
-
-    const onEnterPiP = () => setIsPiP(true);
-    const onLeavePiP = () => setIsPiP(false);
-
-    video.addEventListener('enterpictureinpicture', onEnterPiP);
-    video.addEventListener('leavepictureinpicture', onLeavePiP);
-
-    return () => {
-      video.removeEventListener('enterpictureinpicture', onEnterPiP);
-      video.removeEventListener('leavepictureinpicture', onLeavePiP);
-    };
-  }, []);
-
-  // Update Stats for Nerds
-  useEffect(() => {
-    if (!showStats || !shakaPlayerRef.current || !videoRef.current) return;
-
-    const interval = setInterval(() => {
-      const player = shakaPlayerRef.current;
-      const video = videoRef.current;
-      if (!player || !video) return;
-
-      const statsInfo = player.getStats();
-      const buffered = video.buffered;
-      let bufferHealth = 0;
-      
-      if (buffered.length > 0) {
-        for (let i = 0; i < buffered.length; i++) {
-          if (video.currentTime >= buffered.start(i) && video.currentTime <= buffered.end(i)) {
-            bufferHealth = buffered.end(i) - video.currentTime;
-            break;
-          }
-        }
-      }
-
-      setStats({
-        bandwidth: Math.round(player.getStats().estimatedBandwidth / 1000), // kbps
-        droppedFrames: statsInfo.droppedFrames,
-        decodedFrames: statsInfo.decodedFrames,
-        bufferHealth: parseFloat(bufferHealth.toFixed(2)),
-        resolution: `${statsInfo.width}x${statsInfo.height}`,
-        bitrate: Math.round(statsInfo.streamBandwidth / 1000) // kbps
-      });
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [showStats]);
 
   // Auto-scroll sidebar to active item
   useEffect(() => {
@@ -301,10 +224,8 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   }, [currentItem, type, updateProgress]);
 
 
-  // Initialize Player (Shaka Player)
+  // Initialize Player (HLS or Native)
   useEffect(() => {
-    shaka.polyfill.installAll();
-    
     const video = videoRef.current;
     if (!video) return;
 
@@ -312,17 +233,15 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     setIsRetrying(false);
 
     const finalUrl = url;
+    const isHls = finalUrl.includes('.m3u8') || url.includes('.m3u8') || type === 'live';
     
-    // Reset tracks on new video
+    // Reset audio and subtitle tracks on new video
     setAudioTracks([]);
     setCurrentAudioTrack(-1);
     setShowAudioMenu(false);
     setSubtitleTracks([]);
-    setCurrentSubtitleTrack('');
+    setCurrentSubtitleTrack(-1);
     setShowSubtitleMenu(false);
-    setQualityTracks([]);
-    setCurrentQuality(-1);
-    setShowQualityMenu(false);
     setAutoPlayBlocked(false);
     setError(null);
     
@@ -363,129 +282,121 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         return playerSettings.reconnectDelay;
     };
 
-    const initPlayer = async () => {
-        const player = new shaka.Player(video);
-        shakaPlayerRef.current = player;
+    if (isHls && Hls.isSupported()) {
+      hlsRef.current = new Hls({
+        enableWorker: true,
+        lowLatencyMode: true,
+        manifestLoadingTimeOut: 10000,
+        manifestLoadingMaxRetry: 3,
+        levelLoadingTimeOut: 10000,
+        levelLoadingMaxRetry: 3,
+        fragLoadingTimeOut: 20000,
+        fragLoadingMaxRetry: 3,
+      });
 
-        // Apply Network Request Filter (User-Agent spoofing)
-        player.getNetworkingEngine().registerRequestFilter((type: number, request: any) => {
-            const customUA = account?.userAgent || playerSettings.userAgent;
-            if (customUA) {
-                // Note: Browsers may block setting the 'User-Agent' header.
-                // We set it anyway, and also add a custom header as some providers check it.
-                request.headers['User-Agent'] = customUA;
-                request.headers['X-User-Agent'] = customUA;
-            }
-        });
+      const hls = hlsRef.current;
+      hls.loadSource(finalUrl);
+      hls.attachMedia(video);
+      
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        setIsLoading(false);
+        setIsRetrying(false);
+        setError(null);
+        attemptPlay();
+      });
 
-        // Listen for error events.
-        player.addEventListener('error', (event: any) => {
-            console.error('Shaka Error', event.detail);
-            const error = event.detail;
-            
-            if (error.severity === shaka.util.Error.Severity.CRITICAL) {
-                setIsLoading(true);
-                setIsRetrying(true);
-                if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
-                const delay = getRetryDelay();
-                retryTimeoutRef.current = window.setTimeout(() => {
-                    setRetryCount(prev => prev + 1);
-                }, delay);
-            }
-        });
-
-        // Listen for track changes
-        player.addEventListener('variantchanged', () => {
-            const tracks = player.getVariantTracks();
-            const audioSet = new Set<string>();
-            const audioList: {id: number, name: string, lang: string}[] = [];
-            
-            tracks.forEach((t, index) => {
-                const key = `${t.language}-${t.label}`;
-                if (!audioSet.has(key)) {
-                    audioSet.add(key);
-                    audioList.push({
-                        id: index,
-                        name: t.label || t.language || `Piste ${audioList.length + 1}`,
-                        lang: t.language
-                    });
-                }
-            });
-            setAudioTracks(audioList);
-
-            // Quality tracks
-            const qualities = tracks
-                .filter(t => t.height)
-                .map(t => ({
-                    id: t.id,
-                    height: t.height!,
-                    bitrate: t.bandwidth
-                }))
-                .sort((a, b) => b.height - a.height);
-            
-            // Deduplicate by height
-            const uniqueQualities: typeof qualities = [];
-            const seenHeights = new Set();
-            qualities.forEach(q => {
-                if (!seenHeights.has(q.height)) {
-                    seenHeights.add(q.height);
-                    uniqueQualities.push(q);
-                }
-            });
-            setQualityTracks(uniqueQualities);
-        });
-
-        player.addEventListener('texttrackvisibility', () => {
-            const tracks = player.getTextTracks();
-            const subtitleList = tracks.map((t) => ({
-                id: t.language + t.label,
-                name: t.label || t.language || `Sous-titre`,
-                lang: t.language
+      hls.on(Hls.Events.AUDIO_TRACKS_UPDATED, (event, data) => {
+        if (data.audioTracks && data.audioTracks.length > 0) {
+            const tracks = data.audioTracks.map((t, index) => ({
+                id: index,
+                name: t.name || `Piste ${index + 1}`,
+                lang: t.lang || ''
             }));
-            setSubtitleTracks(subtitleList);
-        });
-
-        try {
-            await player.load(finalUrl);
-            setIsLoading(false);
-            setIsRetrying(false);
-            setError(null);
-            attemptPlay();
-
-            // Initial track setup
-            const tracks = player.getVariantTracks();
-            // ... (rest of track logic handled by event listeners)
-        } catch (e) {
-            console.error("Shaka Load Error", e);
+            setAudioTracks(tracks);
             
-            // Fallback to native HTML5 playback for VODs (MKV, MP4, AVI) if Shaka fails
-            if (video && !finalUrl.includes('.m3u8')) {
-                console.log("Falling back to native HTML5 playback...");
-                try {
-                    await player.unload();
-                    video.src = finalUrl;
-                    video.load();
-                    setIsLoading(false);
-                    setIsRetrying(false);
-                    setError(null);
-                    attemptPlay();
-                    return; // Exit the init function, native playback took over
-                } catch (fallbackError) {
-                    console.error("Native fallback also failed", fallbackError);
+            // Auto-select preferred language
+            const prefLang = playerSettings.preferredAudioLanguage?.toLowerCase();
+            if (prefLang && prefLang !== 'original') {
+                const matchIndex = tracks.findIndex(t => 
+                    t.lang.toLowerCase().includes(prefLang) || 
+                    t.name.toLowerCase().includes(prefLang)
+                );
+                if (matchIndex !== -1 && hls.audioTrack !== matchIndex) {
+                    hls.audioTrack = matchIndex;
+                    setCurrentAudioTrack(matchIndex);
+                } else {
+                    setCurrentAudioTrack(hls.audioTrack);
                 }
+            } else {
+                setCurrentAudioTrack(hls.audioTrack);
             }
-
-            setIsLoading(true);
-            setIsRetrying(true);
-            if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
-            const delay = getRetryDelay();
-            retryTimeoutRef.current = window.setTimeout(() => {
-                setRetryCount(prev => prev + 1);
-            }, delay);
         }
-    };
+      });
 
-    initPlayer();
+      hls.on(Hls.Events.AUDIO_TRACK_SWITCHED, (event, data) => {
+          setCurrentAudioTrack(data.id);
+      });
+
+      hls.on(Hls.Events.SUBTITLE_TRACKS_UPDATED, (event, data) => {
+        if (data.subtitleTracks && data.subtitleTracks.length > 0) {
+            const tracks = data.subtitleTracks.map((t, index) => ({
+                id: index,
+                name: t.name || `Sous-titre ${index + 1}`,
+                lang: t.lang || ''
+            }));
+            setSubtitleTracks(tracks);
+            setCurrentSubtitleTrack(hls.subtitleTrack);
+        }
+      });
+
+      hls.on(Hls.Events.SUBTITLE_TRACK_SWITCH, (event, data) => {
+          setCurrentSubtitleTrack(data.id);
+      });
+
+      hls.on(Hls.Events.ERROR, (event, data) => {
+        console.error("HLS Error", data);
+        if (data.fatal) {
+            switch (data.type) {
+                case Hls.ErrorTypes.MEDIA_ERROR:
+                    hls?.recoverMediaError();
+                    break;
+                case Hls.ErrorTypes.NETWORK_ERROR:
+                default:
+                    hls?.destroy();
+                    setIsLoading(true);
+                    setIsRetrying(true);
+                    if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
+                    const delay = getRetryDelay();
+                    retryTimeoutRef.current = window.setTimeout(() => {
+                        setRetryCount(prev => prev + 1);
+                    }, delay);
+                    break;
+            }
+        }
+      });
+    } else {
+      video.src = finalUrl;
+      video.load();
+      attemptPlay();
+      
+      video.onerror = () => {
+          const err = video.error;
+          let msg = "Erreur de lecture.";
+          if (err?.code === 4) msg = "Format de source non supporté par le navigateur.";
+          else if (err?.code === 3) msg = "Erreur de décodage.";
+          else if (err?.code === 2) msg = "Erreur réseau.";
+          
+          console.error("Native Video Error", err);
+          setError(msg);
+          setIsLoading(true);
+          setIsRetrying(true);
+          if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
+          const delay = getRetryDelay();
+          retryTimeoutRef.current = window.setTimeout(() => {
+               setRetryCount(prev => prev + 1);
+          }, delay);
+      };
+    }
 
     const updateTime = () => setCurrentTime(video.currentTime);
     const updateDuration = () => setDuration(video.duration);
@@ -510,9 +421,9 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
           updateProgress(currentItem, video.currentTime, video.duration);
       }
 
-      if (shakaPlayerRef.current) {
-          shakaPlayerRef.current.destroy();
-          shakaPlayerRef.current = null;
+      if (hlsRef.current) {
+          hlsRef.current.destroy();
+          hlsRef.current = null;
       }
       if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
       if (saveIntervalRef.current) clearInterval(saveIntervalRef.current);
@@ -528,7 +439,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         video.onerror = null;
       }
     };
-  }, [url, retryCount]);
+  }, [url, retryCount]); 
 
   // Handle Controls Visibility
   const handleMouseMove = () => {
@@ -653,41 +564,6 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isPlaying, isMuted, isFullscreen, type, playlist, currentItem]);
 
-  const togglePiP = async () => {
-    if (!videoRef.current) return;
-    try {
-      if (document.pictureInPictureElement) {
-        await document.exitPictureInPicture();
-      } else {
-        if (videoRef.current.readyState >= 2) {
-          await videoRef.current.requestPictureInPicture();
-        }
-      }
-    } catch (error) {
-      console.error("PiP error:", error);
-    }
-  };
-
-  const takeScreenshot = () => {
-    if (!videoRef.current) return;
-    try {
-      const canvas = document.createElement('canvas');
-      canvas.width = videoRef.current.videoWidth;
-      canvas.height = videoRef.current.videoHeight;
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-        const dataUrl = canvas.toDataURL('image/png');
-        const link = document.createElement('a');
-        link.href = dataUrl;
-        link.download = `screenshot-${decodeBase64(title)}-${new Date().getTime()}.png`;
-        link.click();
-      }
-    } catch (e) {
-      console.error("Screenshot failed", e);
-    }
-  };
-
   const rootClasses = isEmbedded 
     ? "absolute inset-0 z-50 bg-black flex flex-col items-center justify-center animate-in fade-in duration-300 overflow-hidden"
     : "fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center animate-in fade-in duration-300 overflow-hidden";
@@ -698,57 +574,6 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       onMouseMove={handleMouseMove}
       className={rootClasses}
     >
-        {/* Lock Overlay */}
-        {isLocked && (
-            <div className="absolute inset-0 z-[70] flex items-center justify-center pointer-events-none">
-                <div className="bg-black/40 backdrop-blur-sm p-6 rounded-full animate-in fade-in zoom-in duration-300">
-                    <Lock size={48} className="text-white/20" />
-                </div>
-                <button 
-                    onClick={() => setIsLocked(false)}
-                    className="absolute bottom-10 left-1/2 -translate-x-1/2 pointer-events-auto bg-fluent-accent text-black px-6 py-3 rounded-full font-bold flex items-center gap-2 shadow-2xl hover:scale-105 active:scale-95 transition-all"
-                >
-                    <Unlock size={20} /> Déverrouiller les contrôles
-                </button>
-            </div>
-        )}
-
-        {/* Stats for Nerds Overlay */}
-        {showStats && (
-            <div className="absolute top-4 left-4 bg-black/80 backdrop-blur-md border border-white/10 p-4 rounded-xl z-[60] text-[10px] font-mono text-white/90 min-w-[200px] shadow-2xl animate-in fade-in zoom-in-95 duration-200">
-                <div className="flex items-center justify-between mb-3 pb-2 border-b border-white/5">
-                    <span className="text-fluent-accent font-bold uppercase tracking-widest">Stats for Nerds</span>
-                    <button onClick={() => setShowStats(false)} className="hover:text-white transition-colors">
-                        <X size={12} />
-                    </button>
-                </div>
-                <div className="space-y-2">
-                    <div className="flex justify-between gap-4">
-                        <span className="text-white/50">Résolution:</span>
-                        <span className="text-white">{stats.resolution}</span>
-                    </div>
-                    <div className="flex justify-between gap-4">
-                        <span className="text-white/50">Débit estimé:</span>
-                        <span className="text-white">{stats.bandwidth} kbps</span>
-                    </div>
-                    <div className="flex justify-between gap-4">
-                        <span className="text-white/50">Débit flux:</span>
-                        <span className="text-white">{stats.bitrate} kbps</span>
-                    </div>
-                    <div className="flex justify-between gap-4">
-                        <span className="text-white/50">Buffer:</span>
-                        <span className={`font-bold ${stats.bufferHealth < 5 ? 'text-red-400' : stats.bufferHealth < 15 ? 'text-yellow-400' : 'text-green-400'}`}>
-                            {stats.bufferHealth}s
-                        </span>
-                    </div>
-                    <div className="flex justify-between gap-4">
-                        <span className="text-white/50">Images perdues:</span>
-                        <span className="text-white">{stats.droppedFrames} / {stats.decodedFrames}</span>
-                    </div>
-                </div>
-            </div>
-        )}
-
         {/* Resume Toast */}
         {resumePoint && !hasResumed && isLoading && (
              <div className="absolute top-20 left-1/2 -translate-x-1/2 bg-fluent-accent/90 text-black px-4 py-2 rounded-full z-50 shadow-lg font-medium animate-in slide-in-from-top-4 fade-in">
@@ -809,7 +634,6 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
             className="w-full h-full object-contain"
             onClick={togglePlay}
             onDoubleClick={onToggleEmbed ? onToggleEmbed : toggleFullscreen}
-            playsInline
         />
 
         {/* Info Overlay */}
@@ -925,8 +749,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         )}
 
         {/* Bottom Controls (VLC Style) */}
-        {!isLocked && (
-            <div className={`absolute bottom-0 left-0 right-0 bg-[#111111]/95 backdrop-blur-md border-t border-white/10 transition-transform duration-300 z-30 pb-2 ${showControls ? 'translate-y-0' : 'translate-y-full'}`}>
+        <div className={`absolute bottom-0 left-0 right-0 bg-[#111111]/95 backdrop-blur-md border-t border-white/10 transition-transform duration-300 z-30 pb-2 ${showControls ? 'translate-y-0' : 'translate-y-full'}`}>
             
             {/* Live TV EPG Overlay */}
             {type === 'live' && epgNow && (
@@ -1066,48 +889,8 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                     )}
 
                     {!isMini && (
-                        <button 
-                            onClick={() => setShowStats(!showStats)} 
-                            className={`transition-colors ${showStats ? 'text-fluent-accent' : 'text-white/70 hover:text-white'}`} 
-                            title="Statistiques techniques"
-                        >
-                            <Activity size={20} />
-                        </button>
-                    )}
-
-                    {!isMini && (
                         <button onClick={() => setShowInfo(!showInfo)} className={`transition-colors ${showInfo ? 'text-fluent-accent' : 'text-white/70 hover:text-white'}`} title="Informations">
                             <Info size={20} />
-                        </button>
-                    )}
-
-                    {!isMini && (
-                        <button 
-                            onClick={takeScreenshot} 
-                            className="text-white/70 hover:text-white transition-colors" 
-                            title="Capture d'écran"
-                        >
-                            <Camera size={20} />
-                        </button>
-                    )}
-
-                    {!isMini && (
-                        <button 
-                            onClick={togglePiP} 
-                            className={`transition-colors ${isPiP ? 'text-fluent-accent' : 'text-white/70 hover:text-white'}`}
-                            title="Picture-in-Picture"
-                        >
-                            <PictureInPicture size={20} />
-                        </button>
-                    )}
-
-                    {!isMini && (
-                        <button 
-                            onClick={() => setIsLocked(true)} 
-                            className="text-white/70 hover:text-white transition-colors" 
-                            title="Verrouiller les contrôles"
-                        >
-                            <Lock size={20} />
                         </button>
                     )}
 
@@ -1117,7 +900,6 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                                 onClick={() => {
                                     setShowAudioMenu(!showAudioMenu);
                                     setShowSubtitleMenu(false);
-                                    setShowQualityMenu(false);
                                     setIsSettingsOpen(false);
                                 }} 
                                 className={`transition-colors ${showAudioMenu ? 'text-fluent-accent' : 'text-white/70 hover:text-white'}`} 
@@ -1136,8 +918,8 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                                                 <button
                                                     key={track.id}
                                                     onClick={() => {
-                                                        if (shakaPlayerRef.current) {
-                                                            shakaPlayerRef.current.selectAudioLanguage(track.lang);
+                                                        if (hlsRef.current) {
+                                                            hlsRef.current.audioTrack = track.id;
                                                             setCurrentAudioTrack(track.id);
                                                         }
                                                         setShowAudioMenu(false);
@@ -1164,7 +946,6 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                                 onClick={() => {
                                     setShowSubtitleMenu(!showSubtitleMenu);
                                     setShowAudioMenu(false);
-                                    setShowQualityMenu(false);
                                     setIsSettingsOpen(false);
                                 }} 
                                 className={`transition-colors ${showSubtitleMenu ? 'text-fluent-accent' : 'text-white/70 hover:text-white'}`} 
@@ -1179,19 +960,19 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                                     <div className="space-y-1 max-h-48 overflow-y-auto custom-scrollbar">
                                         <button
                                             onClick={() => {
-                                                if (shakaPlayerRef.current) {
-                                                    shakaPlayerRef.current.setTextTrackVisibility(false);
-                                                    setCurrentSubtitleTrack('');
+                                                if (hlsRef.current) {
+                                                    hlsRef.current.subtitleTrack = -1;
+                                                    setCurrentSubtitleTrack(-1);
                                                 }
                                                 setShowSubtitleMenu(false);
                                             }}
                                             className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors flex items-center justify-between
-                                                ${currentSubtitleTrack === '' 
+                                                ${currentSubtitleTrack === -1 
                                                     ? 'bg-fluent-accent text-black font-bold' 
                                                     : 'text-white/80 hover:bg-white/5'}`}
                                         >
                                             <span>Désactivés</span>
-                                            {currentSubtitleTrack === '' && <div className="w-1.5 h-1.5 rounded-full bg-black shrink-0 ml-2" />}
+                                            {currentSubtitleTrack === -1 && <div className="w-1.5 h-1.5 rounded-full bg-black shrink-0 ml-2" />}
                                         </button>
                                         
                                         {subtitleTracks.map((track) => {
@@ -1200,9 +981,8 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                                                 <button
                                                     key={track.id}
                                                     onClick={() => {
-                                                        if (shakaPlayerRef.current) {
-                                                            shakaPlayerRef.current.selectTextLanguage(track.lang);
-                                                            shakaPlayerRef.current.setTextTrackVisibility(true);
+                                                        if (hlsRef.current) {
+                                                            hlsRef.current.subtitleTrack = track.id;
                                                             setCurrentSubtitleTrack(track.id);
                                                         }
                                                         setShowSubtitleMenu(false);
@@ -1213,75 +993,6 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                                                             : 'text-white/80 hover:bg-white/5'}`}
                                                 >
                                                     <span className="truncate">{track.name || track.lang || `Piste ${track.id + 1}`}</span>
-                                                    {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-black shrink-0 ml-2" />}
-                                                </button>
-                                            );
-                                        })}
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    )}
-
-                    {!isMini && qualityTracks.length > 1 && (
-                        <div className="relative">
-                            <button 
-                                onClick={() => {
-                                    setShowQualityMenu(!showQualityMenu);
-                                    setShowAudioMenu(false);
-                                    setShowSubtitleMenu(false);
-                                    setIsSettingsOpen(false);
-                                }} 
-                                className={`transition-colors ${showQualityMenu ? 'text-fluent-accent' : 'text-white/70 hover:text-white'}`} 
-                                title="Qualité Vidéo"
-                            >
-                                <Settings size={20} />
-                            </button>
-
-                            {showQualityMenu && (
-                                <div className="absolute bottom-full right-0 mb-4 w-48 bg-[#1e1e1e] border border-white/10 rounded-xl shadow-2xl p-4 z-50 animate-in slide-in-from-bottom-2">
-                                    <h4 className="text-xs font-bold text-white/50 uppercase tracking-widest mb-3">Qualité</h4>
-                                    <div className="space-y-1 max-h-48 overflow-y-auto custom-scrollbar">
-                                        <button
-                                            onClick={() => {
-                                                if (shakaPlayerRef.current) {
-                                                    shakaPlayerRef.current.configure({ abr: { enabled: true } });
-                                                    setCurrentQuality(-1);
-                                                }
-                                                setShowQualityMenu(false);
-                                            }}
-                                            className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors flex items-center justify-between
-                                                ${currentQuality === -1 
-                                                    ? 'bg-fluent-accent text-black font-bold' 
-                                                    : 'text-white/80 hover:bg-white/5'}`}
-                                        >
-                                            <span>Automatique</span>
-                                            {currentQuality === -1 && <div className="w-1.5 h-1.5 rounded-full bg-black shrink-0 ml-2" />}
-                                        </button>
-                                        
-                                        {qualityTracks.map((track) => {
-                                            const isSelected = currentQuality === track.id;
-                                            return (
-                                                <button
-                                                    key={track.id}
-                                                    onClick={() => {
-                                                        if (shakaPlayerRef.current) {
-                                                            shakaPlayerRef.current.configure({ abr: { enabled: false } });
-                                                            const variants = shakaPlayerRef.current.getVariantTracks();
-                                                            const target = variants.find(v => v.id === track.id);
-                                                            if (target) {
-                                                                shakaPlayerRef.current.selectVariantTrack(target, true);
-                                                                setCurrentQuality(track.id);
-                                                            }
-                                                        }
-                                                        setShowQualityMenu(false);
-                                                    }}
-                                                    className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors flex items-center justify-between
-                                                        ${isSelected 
-                                                            ? 'bg-fluent-accent text-black font-bold' 
-                                                            : 'text-white/80 hover:bg-white/5'}`}
-                                                >
-                                                    <span>{track.height}p</span>
                                                     {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-black shrink-0 ml-2" />}
                                                 </button>
                                             );
@@ -1335,41 +1046,6 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                                     <div className="mt-4 pt-3 border-t border-white/5 text-[10px] text-white/40 leading-tight">
                                         Définit le délai avant de tenter une reconnexion en cas de perte de signal.
                                     </div>
-
-                                    <h4 className="text-xs font-bold text-white/50 uppercase tracking-widest mt-4 mb-3">User-Agent (Spoofing)</h4>
-                                    <div className="space-y-2">
-                                        <input 
-                                            type="text"
-                                            placeholder="Ex: Samsung Smart TV"
-                                            value={playerSettings.userAgent || ''}
-                                            onChange={(e) => updatePlayerSettings({ userAgent: e.target.value })}
-                                            className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-fluent-accent transition-colors"
-                                        />
-                                        <div className="flex flex-wrap gap-1">
-                                            {[
-                                                { name: 'VLC', ua: 'VLC/3.0.18 LibVLC/3.0.18' },
-                                                { name: 'Mag', ua: 'Mozilla/5.0 (QtEmbedded; U; Linux; C) AppleWebKit/533.3 (KHTML, like Gecko) MAG200' },
-                                                { name: 'Samsung', ua: 'Mozilla/5.0 (SmartHub; SMART-TV; Linux; Tizen 2.4) AppleWebkit/538.1' }
-                                            ].map(preset => (
-                                                <button 
-                                                    key={preset.name}
-                                                    onClick={() => updatePlayerSettings({ userAgent: preset.ua })}
-                                                    className="px-2 py-1 bg-white/5 hover:bg-white/10 rounded text-[9px] text-white/60 transition-colors"
-                                                >
-                                                    {preset.name}
-                                                </button>
-                                            ))}
-                                            <button 
-                                                onClick={() => updatePlayerSettings({ userAgent: '' })}
-                                                className="px-2 py-1 bg-white/5 hover:bg-white/10 rounded text-[9px] text-red-400/60 transition-colors"
-                                            >
-                                                Reset
-                                            </button>
-                                        </div>
-                                    </div>
-                                    <div className="mt-2 text-[9px] text-white/30 leading-tight italic">
-                                        Certains fournisseurs exigent un User-Agent spécifique pour autoriser la lecture.
-                                    </div>
                                 </div>
                             )}
                         </div>
@@ -1407,7 +1083,6 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                 </div>
             </div>
         </div>
-        )}
     </div>
   );
 };
