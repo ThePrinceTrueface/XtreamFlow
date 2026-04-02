@@ -3,7 +3,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import { 
   Play, Pause, Volume2, VolumeX, Maximize, Minimize, X, 
   SkipBack, SkipForward, Settings, List, ChevronLeft, ChevronRight, Square,
-  Expand, Shrink, RefreshCw, Clock, Info, Columns, AudioLines, Captions, Activity
+  Expand, Shrink, RefreshCw, Clock, Info, Columns, AudioLines, Captions, Activity,
+  PictureInPicture, Camera, Lock, Unlock
 } from 'lucide-react';
 import shaka from 'shaka-player/dist/shaka-player.compiled';
 import { XtreamStream, XtreamAccount } from '../types';
@@ -96,6 +97,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
   // Stats for Nerds State
   const [showStats, setShowStats] = useState(false);
+  const [isLocked, setIsLocked] = useState(false);
   const [stats, setStats] = useState({
     bandwidth: 0,
     droppedFrames: 0,
@@ -340,6 +342,17 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     const initPlayer = async () => {
         const player = new shaka.Player(video);
         shakaPlayerRef.current = player;
+
+        // Apply Network Request Filter (User-Agent spoofing)
+        player.getNetworkingEngine().registerRequestFilter((type: number, request: any) => {
+            const customUA = account?.userAgent || playerSettings.userAgent;
+            if (customUA) {
+                // Note: Browsers may block setting the 'User-Agent' header.
+                // We set it anyway, and also add a custom header as some providers check it.
+                request.headers['User-Agent'] = customUA;
+                request.headers['X-User-Agent'] = customUA;
+            }
+        });
 
         // Listen for error events.
         player.addEventListener('error', (event: any) => {
@@ -598,6 +611,41 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isPlaying, isMuted, isFullscreen, type, playlist, currentItem]);
 
+  const togglePiP = async () => {
+    if (!videoRef.current) return;
+    try {
+      if (document.pictureInPictureElement) {
+        await document.exitPictureInPicture();
+      } else {
+        if (videoRef.current.readyState >= 2) {
+          await videoRef.current.requestPictureInPicture();
+        }
+      }
+    } catch (error) {
+      console.error("PiP error:", error);
+    }
+  };
+
+  const takeScreenshot = () => {
+    if (!videoRef.current) return;
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = videoRef.current.videoWidth;
+      canvas.height = videoRef.current.videoHeight;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+        const dataUrl = canvas.toDataURL('image/png');
+        const link = document.createElement('a');
+        link.href = dataUrl;
+        link.download = `screenshot-${decodeBase64(title)}-${new Date().getTime()}.png`;
+        link.click();
+      }
+    } catch (e) {
+      console.error("Screenshot failed", e);
+    }
+  };
+
   const rootClasses = isEmbedded 
     ? "absolute inset-0 z-50 bg-black flex flex-col items-center justify-center animate-in fade-in duration-300 overflow-hidden"
     : "fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center animate-in fade-in duration-300 overflow-hidden";
@@ -608,6 +656,21 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       onMouseMove={handleMouseMove}
       className={rootClasses}
     >
+        {/* Lock Overlay */}
+        {isLocked && (
+            <div className="absolute inset-0 z-[70] flex items-center justify-center pointer-events-none">
+                <div className="bg-black/40 backdrop-blur-sm p-6 rounded-full animate-in fade-in zoom-in duration-300">
+                    <Lock size={48} className="text-white/20" />
+                </div>
+                <button 
+                    onClick={() => setIsLocked(false)}
+                    className="absolute bottom-10 left-1/2 -translate-x-1/2 pointer-events-auto bg-fluent-accent text-black px-6 py-3 rounded-full font-bold flex items-center gap-2 shadow-2xl hover:scale-105 active:scale-95 transition-all"
+                >
+                    <Unlock size={20} /> Déverrouiller les contrôles
+                </button>
+            </div>
+        )}
+
         {/* Stats for Nerds Overlay */}
         {showStats && (
             <div className="absolute top-4 left-4 bg-black/80 backdrop-blur-md border border-white/10 p-4 rounded-xl z-[60] text-[10px] font-mono text-white/90 min-w-[200px] shadow-2xl animate-in fade-in zoom-in-95 duration-200">
@@ -819,7 +882,8 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         )}
 
         {/* Bottom Controls (VLC Style) */}
-        <div className={`absolute bottom-0 left-0 right-0 bg-[#111111]/95 backdrop-blur-md border-t border-white/10 transition-transform duration-300 z-30 pb-2 ${showControls ? 'translate-y-0' : 'translate-y-full'}`}>
+        {!isLocked && (
+            <div className={`absolute bottom-0 left-0 right-0 bg-[#111111]/95 backdrop-blur-md border-t border-white/10 transition-transform duration-300 z-30 pb-2 ${showControls ? 'translate-y-0' : 'translate-y-full'}`}>
             
             {/* Live TV EPG Overlay */}
             {type === 'live' && epgNow && (
@@ -971,6 +1035,36 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                     {!isMini && (
                         <button onClick={() => setShowInfo(!showInfo)} className={`transition-colors ${showInfo ? 'text-fluent-accent' : 'text-white/70 hover:text-white'}`} title="Informations">
                             <Info size={20} />
+                        </button>
+                    )}
+
+                    {!isMini && (
+                        <button 
+                            onClick={takeScreenshot} 
+                            className="text-white/70 hover:text-white transition-colors" 
+                            title="Capture d'écran"
+                        >
+                            <Camera size={20} />
+                        </button>
+                    )}
+
+                    {!isMini && (
+                        <button 
+                            onClick={togglePiP} 
+                            className="text-white/70 hover:text-white transition-colors" 
+                            title="Picture-in-Picture"
+                        >
+                            <PictureInPicture size={20} />
+                        </button>
+                    )}
+
+                    {!isMini && (
+                        <button 
+                            onClick={() => setIsLocked(true)} 
+                            className="text-white/70 hover:text-white transition-colors" 
+                            title="Verrouiller les contrôles"
+                        >
+                            <Lock size={20} />
                         </button>
                     )}
 
@@ -1198,6 +1292,41 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                                     <div className="mt-4 pt-3 border-t border-white/5 text-[10px] text-white/40 leading-tight">
                                         Définit le délai avant de tenter une reconnexion en cas de perte de signal.
                                     </div>
+
+                                    <h4 className="text-xs font-bold text-white/50 uppercase tracking-widest mt-4 mb-3">User-Agent (Spoofing)</h4>
+                                    <div className="space-y-2">
+                                        <input 
+                                            type="text"
+                                            placeholder="Ex: Samsung Smart TV"
+                                            value={playerSettings.userAgent || ''}
+                                            onChange={(e) => updatePlayerSettings({ userAgent: e.target.value })}
+                                            className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-fluent-accent transition-colors"
+                                        />
+                                        <div className="flex flex-wrap gap-1">
+                                            {[
+                                                { name: 'VLC', ua: 'VLC/3.0.18 LibVLC/3.0.18' },
+                                                { name: 'Mag', ua: 'Mozilla/5.0 (QtEmbedded; U; Linux; C) AppleWebKit/533.3 (KHTML, like Gecko) MAG200' },
+                                                { name: 'Samsung', ua: 'Mozilla/5.0 (SmartHub; SMART-TV; Linux; Tizen 2.4) AppleWebkit/538.1' }
+                                            ].map(preset => (
+                                                <button 
+                                                    key={preset.name}
+                                                    onClick={() => updatePlayerSettings({ userAgent: preset.ua })}
+                                                    className="px-2 py-1 bg-white/5 hover:bg-white/10 rounded text-[9px] text-white/60 transition-colors"
+                                                >
+                                                    {preset.name}
+                                                </button>
+                                            ))}
+                                            <button 
+                                                onClick={() => updatePlayerSettings({ userAgent: '' })}
+                                                className="px-2 py-1 bg-white/5 hover:bg-white/10 rounded text-[9px] text-red-400/60 transition-colors"
+                                            >
+                                                Reset
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div className="mt-2 text-[9px] text-white/30 leading-tight italic">
+                                        Certains fournisseurs exigent un User-Agent spécifique pour autoriser la lecture.
+                                    </div>
                                 </div>
                             )}
                         </div>
@@ -1235,6 +1364,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                 </div>
             </div>
         </div>
+        )}
     </div>
   );
 };
