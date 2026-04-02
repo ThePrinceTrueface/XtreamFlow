@@ -70,23 +70,16 @@ export class DownloadService {
       const file = await item.fileHandle.getFile();
       const startByte = file.size;
 
-      // Use proxy if needed for mixed content or if direct fetch fails
-      const isMixedContent = window.location.protocol === 'https:' && item.url.startsWith('http:');
       let response;
       
       try {
-        const fetchUrl = isMixedContent ? createProxyUrl(item.url) : item.url;
-        response = await fetch(fetchUrl, {
+        response = await fetch(item.url, {
           signal: controller.signal,
           headers: startByte > 0 ? { 'Range': `bytes=${startByte}-` } : {},
         });
       } catch (e) {
-        console.warn('Initial fetch failed, falling back to proxy...', e);
-        const proxyUrl = createProxyUrl(item.url);
-        response = await fetch(proxyUrl, {
-          signal: controller.signal,
-          headers: startByte > 0 ? { 'Range': `bytes=${startByte}-` } : {},
-        });
+        console.error('Download fetch failed:', e);
+        throw e;
       }
 
       if (!response.ok && response.status !== 206) {

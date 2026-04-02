@@ -544,7 +544,7 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
     const baseUrl = `http://${account.host}:${account.port}`;
     if (type === 'live') {
         setPlayer({ 
-            url: createProxyUrl(`${baseUrl}/live/${account.username}/${account.password}/${item.stream_id}.m3u8`), 
+            url: `${baseUrl}/live/${account.username}/${account.password}/${item.stream_id}.m3u8`, 
             title: item.name, 
             type: 'live',
             currentItem: item
@@ -552,7 +552,7 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
     } else if (type === 'vod') {
         const ext = (item as any).container_extension || 'mp4';
         setPlayer({ 
-            url: createProxyUrl(`${baseUrl}/movie/${account.username}/${account.password}/${item.stream_id}.${ext}`), 
+            url: `${baseUrl}/movie/${account.username}/${account.password}/${item.stream_id}.${ext}`, 
             title: item.name, 
             type: 'vod',
             currentItem: item
@@ -566,7 +566,7 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
                      const ep = firstSeason[0];
                      const ext = ep.container_extension || 'mp4';
                      setPlayer({
-                         url: createProxyUrl(`${baseUrl}/series/${account.username}/${account.password}/${ep.id}.${ext}`),
+                         url: `${baseUrl}/series/${account.username}/${account.password}/${ep.id}.${ext}`,
                          title: `${item.name} - S${seasons[0]}E${ep.episode_num}`,
                          type: 'series',
                          currentItem: item
@@ -584,7 +584,7 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
       const baseUrl = `http://${account.host}:${account.port}`;
       const ext = episode.container_extension || 'mp4';
       setPlayer({
-          url: createProxyUrl(`${baseUrl}/series/${account.username}/${account.password}/${episode.id}.${ext}`),
+          url: `${baseUrl}/series/${account.username}/${account.password}/${episode.id}.${ext}`,
           title: `${selectedItem?.name || 'Série'} - S${episode.season}E${episode.episode_num} - ${episode.title}`,
           type: 'series',
           currentItem: selectedItem || undefined
