@@ -3,7 +3,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { 
   Play, Pause, Volume2, VolumeX, Maximize, Minimize, X, 
   SkipBack, SkipForward, Settings, List, ChevronLeft, ChevronRight, Square,
-  Expand, Shrink, RefreshCw, Clock, Info, Columns, AudioLines, Captions
+  Expand, Shrink, RefreshCw, Clock, Info, Columns, AudioLines, Captions, Activity
 } from 'lucide-react';
 import shaka from 'shaka-player/dist/shaka-player.compiled';
 import { XtreamStream, XtreamAccount } from '../types';
@@ -94,7 +94,53 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const [currentQuality, setCurrentQuality] = useState<number>(-1); // -1 means Auto
   const [showQualityMenu, setShowQualityMenu] = useState(false);
 
+  // Stats for Nerds State
+  const [showStats, setShowStats] = useState(false);
+  const [stats, setStats] = useState({
+    bandwidth: 0,
+    droppedFrames: 0,
+    decodedFrames: 0,
+    bufferHealth: 0,
+    resolution: '',
+    bitrate: 0
+  });
+
   const controlsTimeoutRef = useRef<number | null>(null);
+
+  // Update Stats for Nerds
+  useEffect(() => {
+    if (!showStats || !shakaPlayerRef.current || !videoRef.current) return;
+
+    const interval = setInterval(() => {
+      const player = shakaPlayerRef.current;
+      const video = videoRef.current;
+      if (!player || !video) return;
+
+      const statsInfo = player.getStats();
+      const buffered = video.buffered;
+      let bufferHealth = 0;
+      
+      if (buffered.length > 0) {
+        for (let i = 0; i < buffered.length; i++) {
+          if (video.currentTime >= buffered.start(i) && video.currentTime <= buffered.end(i)) {
+            bufferHealth = buffered.end(i) - video.currentTime;
+            break;
+          }
+        }
+      }
+
+      setStats({
+        bandwidth: Math.round(player.getStats().estimatedBandwidth / 1000), // kbps
+        droppedFrames: statsInfo.droppedFrames,
+        decodedFrames: statsInfo.decodedFrames,
+        bufferHealth: parseFloat(bufferHealth.toFixed(2)),
+        resolution: `${statsInfo.width}x${statsInfo.height}`,
+        bitrate: Math.round(statsInfo.streamBandwidth / 1000) // kbps
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [showStats]);
 
   // Auto-scroll sidebar to active item
   useEffect(() => {
@@ -562,6 +608,42 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       onMouseMove={handleMouseMove}
       className={rootClasses}
     >
+        {/* Stats for Nerds Overlay */}
+        {showStats && (
+            <div className="absolute top-4 left-4 bg-black/80 backdrop-blur-md border border-white/10 p-4 rounded-xl z-[60] text-[10px] font-mono text-white/90 min-w-[200px] shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+                <div className="flex items-center justify-between mb-3 pb-2 border-b border-white/5">
+                    <span className="text-fluent-accent font-bold uppercase tracking-widest">Stats for Nerds</span>
+                    <button onClick={() => setShowStats(false)} className="hover:text-white transition-colors">
+                        <X size={12} />
+                    </button>
+                </div>
+                <div className="space-y-2">
+                    <div className="flex justify-between gap-4">
+                        <span className="text-white/50">Résolution:</span>
+                        <span className="text-white">{stats.resolution}</span>
+                    </div>
+                    <div className="flex justify-between gap-4">
+                        <span className="text-white/50">Débit estimé:</span>
+                        <span className="text-white">{stats.bandwidth} kbps</span>
+                    </div>
+                    <div className="flex justify-between gap-4">
+                        <span className="text-white/50">Débit flux:</span>
+                        <span className="text-white">{stats.bitrate} kbps</span>
+                    </div>
+                    <div className="flex justify-between gap-4">
+                        <span className="text-white/50">Buffer:</span>
+                        <span className={`font-bold ${stats.bufferHealth < 5 ? 'text-red-400' : stats.bufferHealth < 15 ? 'text-yellow-400' : 'text-green-400'}`}>
+                            {stats.bufferHealth}s
+                        </span>
+                    </div>
+                    <div className="flex justify-between gap-4">
+                        <span className="text-white/50">Images perdues:</span>
+                        <span className="text-white">{stats.droppedFrames} / {stats.decodedFrames}</span>
+                    </div>
+                </div>
+            </div>
+        )}
+
         {/* Resume Toast */}
         {resumePoint && !hasResumed && isLoading && (
              <div className="absolute top-20 left-1/2 -translate-x-1/2 bg-fluent-accent/90 text-black px-4 py-2 rounded-full z-50 shadow-lg font-medium animate-in slide-in-from-top-4 fade-in">
@@ -873,6 +955,16 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                             title="Liste des chaînes"
                         >
                             <List size={20} />
+                        </button>
+                    )}
+
+                    {!isMini && (
+                        <button 
+                            onClick={() => setShowStats(!showStats)} 
+                            className={`transition-colors ${showStats ? 'text-fluent-accent' : 'text-white/70 hover:text-white'}`} 
+                            title="Statistiques techniques"
+                        >
+                            <Activity size={20} />
                         </button>
                     )}
 
