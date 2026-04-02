@@ -61,6 +61,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const [isLoading, setIsLoading] = useState(true);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [autoPlayBlocked, setAutoPlayBlocked] = useState(false);
+  const [isPiP, setIsPiP] = useState(false);
   
   // Resume State
   const [resumePoint, setResumePoint] = useState<number | null>(null);
@@ -108,6 +109,23 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   });
 
   const controlsTimeoutRef = useRef<number | null>(null);
+
+  // Picture-in-Picture Event Listeners
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    const onEnterPiP = () => setIsPiP(true);
+    const onLeavePiP = () => setIsPiP(false);
+
+    video.addEventListener('enterpictureinpicture', onEnterPiP);
+    video.addEventListener('leavepictureinpicture', onLeavePiP);
+
+    return () => {
+      video.removeEventListener('enterpictureinpicture', onEnterPiP);
+      video.removeEventListener('leavepictureinpicture', onLeavePiP);
+    };
+  }, []);
 
   // Update Stats for Nerds
   useEffect(() => {
@@ -1051,7 +1069,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                     {!isMini && (
                         <button 
                             onClick={togglePiP} 
-                            className="text-white/70 hover:text-white transition-colors" 
+                            className={`transition-colors ${isPiP ? 'text-fluent-accent' : 'text-white/70 hover:text-white'}`}
                             title="Picture-in-Picture"
                         >
                             <PictureInPicture size={20} />
