@@ -7,9 +7,15 @@ import {
   PictureInPicture, Camera, Lock, Unlock
 } from 'lucide-react';
 import shaka from 'shaka-player/dist/shaka-player.compiled';
+import muxjs from 'mux.js';
 import { XtreamStream, XtreamAccount } from '../types';
 import { createProxyUrl, decodeBase64 } from '../utils';
 import { useUserPreferences } from '../hooks/useUserPreferences';
+
+// Attach mux.js to window so Shaka Player can find it for TS segments
+if (typeof window !== 'undefined') {
+  (window as any).muxjs = muxjs;
+}
 
 interface VideoPlayerProps {
   url: string;
@@ -785,6 +791,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
             className="w-full h-full object-contain"
             onClick={togglePlay}
             onDoubleClick={onToggleEmbed ? onToggleEmbed : toggleFullscreen}
+            playsInline
         />
 
         {/* Info Overlay */}
