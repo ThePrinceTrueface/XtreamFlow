@@ -1,5 +1,6 @@
 import { db } from '../../db';
 import { DownloadItem } from '../../types';
+import { createProxyUrl } from '../../utils';
 
 export class DownloadService {
   private static instance: DownloadService;
@@ -69,16 +70,18 @@ export class DownloadService {
       const file = await item.fileHandle.getFile();
       const startByte = file.size;
 
-      const secureUrl = item.url.replace(/^http:\/\//i, 'https://');
+      // Use proxy if needed for mixed content or if direct fetch fails
+      const isMixedContent = window.location.protocol === 'https:' && item.url.startsWith('http:');
       let response;
+      
       try {
-        response = await fetch(secureUrl, {
+        const fetchUrl = isMixedContent ? createProxyUrl(item.url) : item.url;
+        response = await fetch(fetchUrl, {
           signal: controller.signal,
           headers: startByte > 0 ? { 'Range': `bytes=${startByte}-` } : {},
         });
       } catch (e) {
-        console.warn('Direct HTTPS fetch failed, falling back to proxy...', e);
-        const { createProxyUrl } = await import('../../utils');
+        console.warn('Initial fetch failed, falling back to proxy...', e);
         const proxyUrl = createProxyUrl(item.url);
         response = await fetch(proxyUrl, {
           signal: controller.signal,

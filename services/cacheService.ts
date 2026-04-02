@@ -15,7 +15,8 @@ export class CacheService {
   }
 
   private buildApiUrl(account: XtreamAccount, action: string, params: Record<string, string> = {}) {
-    const baseUrl = `${account.protocol}://${account.host}:${account.port}/player_api.php`;
+    // Force http for Xtream API calls
+    const baseUrl = `http://${account.host}:${account.port}/player_api.php`;
     const queryParams = new URLSearchParams({ 
       username: account.username, 
       password: account.password, 

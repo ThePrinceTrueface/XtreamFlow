@@ -47,7 +47,8 @@ export const parseXtreamUrl = (url: string): Partial<XtreamAccount> | null => {
     if (!username || !password) return null;
 
     return {
-      protocol: urlObj.protocol.replace(':', '') as 'http' | 'https',
+      // Force http for Xtream accounts
+      protocol: 'http',
       host: urlObj.hostname,
       port: urlObj.port || (urlObj.protocol === 'https:' ? '443' : '80'),
       username,

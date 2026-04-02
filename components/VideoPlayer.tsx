@@ -113,7 +113,8 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     const fetchEPG = async () => {
         try {
             // Using get_short_epg for lighter payload
-            const apiUrl = `${account.protocol}://${account.host}:${account.port}/player_api.php?username=${account.username}&password=${account.password}&action=get_short_epg&stream_id=${currentItem.stream_id}&limit=4`;
+            // Force http for Xtream API calls
+            const apiUrl = `http://${account.host}:${account.port}/player_api.php?username=${account.username}&password=${account.password}&action=get_short_epg&stream_id=${currentItem.stream_id}&limit=4`;
             const proxyUrl = createProxyUrl(apiUrl);
             
             const res = await fetch(proxyUrl);
@@ -232,7 +233,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     setIsRetrying(false);
 
     const isMixedContent = window.location.protocol === 'https:' && url.startsWith('http:');
-    const finalUrl = (retryCount > 0 || isMixedContent) ? createProxyUrl(url) : url.replace(/^http:\/\//i, 'https://');
+    const finalUrl = (retryCount > 0 || isMixedContent) ? createProxyUrl(url) : url;
     const isHls = finalUrl.includes('.m3u8') || url.includes('.m3u8') || type === 'live';
     
     // Reset audio and subtitle tracks on new video

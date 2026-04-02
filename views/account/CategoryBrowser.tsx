@@ -262,7 +262,8 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
   }, [heroPhase, heroIndex, uiMode]);
 
   const buildApiUrl = useCallback((action: string, params: Record<string, string> = {}) => {
-    const baseUrl = `${account.protocol}://${account.host}:${account.port}/player_api.php`;
+    // Force http for Xtream API calls
+    const baseUrl = `http://${account.host}:${account.port}/player_api.php`;
     const queryParams = new URLSearchParams({ username: account.username, password: account.password, action, ...params });
     return createProxyUrl(`${baseUrl}?${queryParams.toString()}`);
   }, [account]);
@@ -539,7 +540,8 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
   }, [currentLevel, selectedItem, fetchAndSetDetail, account.id, type, selectedCategory, navigate]);
 
   const handlePlay = useCallback((item: XtreamStream) => {
-    const baseUrl = `${account.protocol}://${account.host}:${account.port}`;
+    // Force http for Xtream streams
+    const baseUrl = `http://${account.host}:${account.port}`;
     if (type === 'live') {
         setPlayer({ 
             url: createProxyUrl(`${baseUrl}/live/${account.username}/${account.password}/${item.stream_id}.m3u8`), 
@@ -578,7 +580,8 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
   }, [account, type, currentLevel, detailData]);
 
   const handlePlayEpisode = useCallback((episode: any) => {
-      const baseUrl = `${account.protocol}://${account.host}:${account.port}`;
+      // Force http for Xtream streams
+      const baseUrl = `http://${account.host}:${account.port}`;
       const ext = episode.container_extension || 'mp4';
       setPlayer({
           url: createProxyUrl(`${baseUrl}/series/${account.username}/${account.password}/${episode.id}.${ext}`),

@@ -106,7 +106,8 @@ export default function App() {
         return;
       }
 
-      const baseUrl = `${account.protocol}://${account.host}:${account.port}`;
+      // Force http for Xtream URLs
+      const baseUrl = `http://${account.host}:${account.port}`;
       let url = '';
       let title = stream.name;
       let type: 'live' | 'vod' | 'series' = stream.type;
