@@ -66,6 +66,7 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
       title: string; 
       type: 'live' | 'vod' | 'series';
       currentItem?: XtreamStream;
+      currentEpisode?: any;
   } | null>(null);
   const [isPlayerExpanded, setIsPlayerExpanded] = useState(false);
   const [isPlayerFullWindow, setIsPlayerFullWindow] = useState(false);
@@ -569,7 +570,8 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
                          url: `${baseUrl}/series/${account.username}/${account.password}/${ep.id}.${ext}`,
                          title: `${item.name} - S${seasons[0]}E${ep.episode_num}`,
                          type: 'series',
-                         currentItem: item
+                         currentItem: item,
+                         currentEpisode: ep
                      });
                      return;
                  }
@@ -587,7 +589,8 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
           url: `${baseUrl}/series/${account.username}/${account.password}/${episode.id}.${ext}`,
           title: `${selectedItem?.name || 'Série'} - S${episode.season}E${episode.episode_num} - ${episode.title}`,
           type: 'series',
-          currentItem: selectedItem || undefined
+          currentItem: selectedItem || undefined,
+          currentEpisode: episode
       });
   }, [account, selectedItem]);
 
@@ -679,6 +682,15 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
     return () => { isMounted = false; };
   }, [account, heroItem, currentLevel, type]);
 
+  const playerPlaylist = useMemo(() => {
+      if (type === 'live' || type === 'vod') {
+          return itemsToDisplay;
+      } else if (type === 'series' && player?.currentEpisode && detailData?.episodes) {
+          return detailData.episodes[player.currentEpisode.season] || [];
+      }
+      return undefined;
+  }, [type, itemsToDisplay, player?.currentEpisode, detailData]);
+
   return (
     <div className="h-full flex flex-col bg-transparent relative">
         <style>{`
@@ -693,9 +705,9 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
                 title={player.title} 
                 type={player.type} 
                 onClose={handleClosePlayer}
-                playlist={type === 'live' ? itemsToDisplay : undefined}
+                playlist={playerPlaylist}
                 currentItem={player.currentItem}
-                onChannelSelect={handlePlay}
+                onChannelSelect={type === 'series' ? handlePlayEpisode : handlePlay}
                 isEmbedded={false}
                 onToggleEmbed={() => setIsPlayerFullWindow(false)}
                 onRestore={uiMode === 'flow' ? () => { setIsPlayerFullWindow(false); setViewMode('grid'); } : undefined}
@@ -773,9 +785,9 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
                                             title={player.title} 
                                             type={player.type} 
                                             onClose={handleClosePlayer}
-                                            playlist={type === 'live' ? itemsToDisplay : undefined}
+                                            playlist={playerPlaylist}
                                             currentItem={player.currentItem}
-                                            onChannelSelect={handlePlay}
+                                            onChannelSelect={type === 'series' ? handlePlayEpisode : handlePlay}
                                             isEmbedded={true}
                                             onToggleEmbed={() => setIsPlayerFullWindow(true)}
                                             account={account}
@@ -839,9 +851,9 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
                                                         title={player.title} 
                                                         type={player.type} 
                                                         onClose={handleClosePlayer}
-                                                        playlist={type === 'live' ? displayData : undefined}
+                                                        playlist={playerPlaylist}
                                                         currentItem={player.currentItem}
-                                                        onChannelSelect={handlePlay}
+                                                        onChannelSelect={type === 'series' ? handlePlayEpisode : handlePlay}
                                                         isEmbedded={true}
                                                         isMini={!isPlayerExpanded}
                                                         onToggleEmbed={() => setIsPlayerExpanded(!isPlayerExpanded)}
@@ -973,9 +985,9 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
                                             title={player.title} 
                                             type={player.type} 
                                             onClose={handleClosePlayer}
-                                            playlist={type === 'live' ? displayData : undefined}
+                                            playlist={playerPlaylist}
                                             currentItem={player.currentItem}
-                                            onChannelSelect={handlePlay}
+                                            onChannelSelect={type === 'series' ? handlePlayEpisode : handlePlay}
                                             isEmbedded={true}
                                             isMini={!isPlayerExpanded}
                                             onToggleEmbed={() => setIsPlayerExpanded(!isPlayerExpanded)}

@@ -40,6 +40,7 @@ export type ReconnectDelay = 'progressive' | 2000 | 3000 | 5000;
 export interface PlayerSettings {
   reconnectDelay: ReconnectDelay;
   preferredAudioLanguage?: string;
+  bufferSize?: 'small' | 'normal' | 'large';
 }
 
 export interface StreamProgress {

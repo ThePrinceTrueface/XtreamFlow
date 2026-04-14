@@ -2,8 +2,10 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { 
   Play, Pause, Volume2, VolumeX, Maximize, Minimize, X, 
-  SkipBack, SkipForward, Settings, List, ChevronLeft, ChevronRight, Square,
-  Expand, Shrink, RefreshCw, Clock, Info, Columns, AudioLines, Captions
+  SkipBack, SkipForward, Settings, List, ListVideo, ChevronLeft, ChevronRight, Square,
+  Expand, Shrink, RefreshCw, Clock, Info, Columns, AudioLines, Captions,
+  ChevronUp, ChevronDown, Search, MonitorPlay, Tv, PictureInPicture,
+  RotateCcw, RotateCw, Film
 } from 'lucide-react';
 import Hls from 'hls.js';
 import { XtreamStream, XtreamAccount } from '../types';
@@ -15,9 +17,9 @@ interface VideoPlayerProps {
   title: string;
   type: 'live' | 'vod' | 'series';
   onClose: () => void;
-  playlist?: XtreamStream[];
+  playlist?: any[];
   currentItem?: XtreamStream;
-  onChannelSelect?: (item: XtreamStream) => void;
+  onChannelSelect?: (item: any) => void;
   isEmbedded?: boolean;
   isMini?: boolean;
   onToggleEmbed?: () => void;
@@ -40,7 +42,6 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const sidebarRef = useRef<HTMLDivElement>(null);
   const retryTimeoutRef = useRef<number | null>(null);
   const epgIntervalRef = useRef<number | null>(null);
   
@@ -57,6 +58,20 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const [duration, setDuration] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showControls, setShowControls] = useState(true);
+  const [showAdvancedControls, setShowAdvancedControls] = useState(false);
+  const [activeMenu, setActiveMenu] = useState<'none' | 'channels' | 'audio' | 'subtitles' | 'settings'>('none');
+  const [currentTimeString, setCurrentTimeString] = useState('');
+
+  // Clock Update
+  useEffect(() => {
+    const updateClock = () => {
+      const now = new Date();
+      setCurrentTimeString(now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+    };
+    updateClock();
+    const interval = setInterval(updateClock, 10000);
+    return () => clearInterval(interval);
+  }, []);
   const [isLoading, setIsLoading] = useState(true);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [autoPlayBlocked, setAutoPlayBlocked] = useState(false);
@@ -70,7 +85,6 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const [isRetrying, setIsRetrying] = useState(false);
   
   // Live TV Specific State
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
@@ -91,15 +105,31 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
   const controlsTimeoutRef = useRef<number | null>(null);
 
-  // Auto-scroll sidebar to active item
+  // Auto-scroll to active item in channel list
   useEffect(() => {
-    if (isSidebarOpen && currentItem && sidebarRef.current) {
-        const activeEl = document.getElementById(`channel-${currentItem.stream_id}`);
-        if (activeEl) {
-            activeEl.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    if (activeMenu === 'channels') {
+        let activeId = '';
+        if ((type === 'live' || type === 'vod') && currentItem) {
+            activeId = `channel-${currentItem.stream_id}`;
+        } else if (type === 'series' && url) {
+            // Extract episode ID from URL for series
+            const match = url.match(/\/(\d+)\.[a-zA-Z0-9]+$/);
+            if (match && match[1]) {
+                activeId = `episode-${match[1]}`;
+            }
+        }
+
+        if (activeId) {
+            const activeEl = document.getElementById(activeId);
+            if (activeEl) {
+                // Use setTimeout to ensure the list is rendered before scrolling
+                setTimeout(() => {
+                    activeEl.scrollIntoView({ inline: 'center', behavior: 'smooth', block: 'nearest' });
+                }, 100);
+            }
         }
     }
-  }, [isSidebarOpen, currentItem]);
+  }, [activeMenu, currentItem, type, url]);
 
   // EPG Fetch Logic
   useEffect(() => {
@@ -283,9 +313,32 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     };
 
     if (isHls && Hls.isSupported()) {
+      // Determine buffer settings based on user preference and stream type
+      let maxBufferLength = 30;
+      let maxMaxBufferLength = 600;
+      let backBufferLength = 90;
+
+      if (type === 'live') {
+          maxBufferLength = 10;
+          maxMaxBufferLength = 20;
+          backBufferLength = 30;
+      }
+
+      const bufferPref = playerSettings.bufferSize || 'normal';
+      if (bufferPref === 'small') {
+          maxBufferLength = Math.max(5, maxBufferLength / 2);
+          maxMaxBufferLength = Math.max(10, maxMaxBufferLength / 2);
+      } else if (bufferPref === 'large') {
+          maxBufferLength = maxBufferLength * 2;
+          maxMaxBufferLength = maxMaxBufferLength * 2;
+      }
+
       hlsRef.current = new Hls({
         enableWorker: true,
-        lowLatencyMode: true,
+        lowLatencyMode: type === 'live',
+        maxBufferLength,
+        maxMaxBufferLength,
+        backBufferLength,
         manifestLoadingTimeOut: 10000,
         manifestLoadingMaxRetry: 3,
         levelLoadingTimeOut: 10000,
@@ -445,7 +498,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const handleMouseMove = () => {
     setShowControls(true);
     if (controlsTimeoutRef.current) window.clearTimeout(controlsTimeoutRef.current);
-    if (!isSidebarOpen) {
+    if (activeMenu === 'none') {
         controlsTimeoutRef.current = window.setTimeout(() => {
             if (isPlaying && !isLoading) setShowControls(false);
         }, 3000);
@@ -549,6 +602,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       if (e.key === ' ' || e.key === 'k') togglePlay();
       if (e.key === 'f') toggleFullscreen();
       if (e.key === 's') handleStop();
+      if (e.key === 'ArrowDown') setShowAdvancedControls(prev => !prev);
       
       if (type !== 'live') {
         if (e.key === 'ArrowRight') skip(10);
@@ -673,68 +727,24 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
             </div>
         )}
 
-        {/* Live TV Sidebar Overlay */}
-        {type === 'live' && playlist && (
-            <div 
-                ref={sidebarRef}
-                className={`absolute top-0 right-0 bottom-16 w-80 bg-black/80 backdrop-blur-xl border-l border-white/10 transition-transform duration-300 ease-in-out z-20 flex flex-col
-                    ${isSidebarOpen ? 'translate-x-0' : 'translate-x-full'}`}
-            >
-                <div className="p-4 border-b border-white/10 flex items-center justify-between">
-                    <h3 className="text-white font-semibold">Chaînes</h3>
-                    <button onClick={() => setIsSidebarOpen(false)} className="text-white/60 hover:text-white"><X size={18} /></button>
-                </div>
-                <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-1">
-                    {playlist.map((item, index) => {
-                        const isActive = currentItem && item.stream_id === currentItem.stream_id;
-                        return (
-                            <div 
-                                key={item.stream_id} 
-                                id={`channel-${item.stream_id}`}
-                                onClick={() => onChannelSelect && onChannelSelect(item)}
-                                className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer transition-colors group
-                                    ${isActive ? 'bg-fluent-accent/20 border border-fluent-accent/20' : 'hover:bg-white/10 border border-transparent'}`}
-                            >
-                                <div className="w-10 h-10 rounded bg-black/40 flex items-center justify-center shrink-0 overflow-hidden">
-                                    {item.stream_icon ? (
-                                        <img src={item.stream_icon} className="w-full h-full object-contain" loading="lazy" />
-                                    ) : (
-                                        <div className="text-white/20 text-xs">{index + 1}</div>
-                                    )}
-                                </div>
-                                <div className="min-w-0">
-                                    <p className={`text-sm font-medium truncate ${isActive ? 'text-fluent-accent' : 'text-white/80 group-hover:text-white'}`}>
-                                        {decodeBase64(item.name)}
-                                    </p>
-                                </div>
-                                {isActive && (
-                                    <div className="w-1.5 h-1.5 rounded-full bg-fluent-accent ml-auto animate-pulse" />
-                                )}
-                            </div>
-                        )
-                    })}
-                </div>
-            </div>
-        )}
-
         {/* Top Bar (Title & Close) */}
         {!isMini && (
-            <div className={`absolute top-0 left-0 right-0 p-4 bg-gradient-to-b from-black/80 to-transparent transition-opacity duration-300 z-30 ${showControls ? 'opacity-100' : 'opacity-0'}`}>
-                <div className="flex justify-between items-center">
-                    <div className="flex items-center gap-2">
-                        <span className="bg-fluent-accent text-black text-xs font-bold px-2 py-0.5 rounded uppercase">{type}</span>
-                        <h2 className="text-white font-medium text-lg drop-shadow-md truncate max-w-2xl">{decodeBase64(title)}</h2>
+            <div className={`absolute top-0 left-0 right-0 p-6 flex justify-between items-start z-40 bg-gradient-to-b from-black/80 to-transparent transition-opacity duration-300 ${showControls ? 'opacity-100' : 'opacity-0'}`}>
+                <div className="text-white font-medium text-lg drop-shadow-md">
+                    {type === 'live' ? 'LIVE TV' : 'VOD'} | {decodeBase64(title)}
+                </div>
+                <div className="flex items-center gap-4">
+                    <div className="text-white font-medium text-lg drop-shadow-md">
+                        {currentTimeString}
                     </div>
-                    <div className="flex items-center gap-2">
-                        {onToggleEmbed && (
-                            <button onClick={onToggleEmbed} className="text-white/80 hover:text-white p-2 rounded-full hover:bg-white/10 transition-colors" title={isEmbedded ? "Agrandir" : "Réduire"}>
-                                 {isEmbedded ? <Expand size={20} /> : <Shrink size={20} />}
-                            </button>
-                        )}
-                        <button onClick={onClose} className="text-white/80 hover:text-white p-2 rounded-full hover:bg-white/10 transition-colors">
-                            <X size={24} />
+                    {onToggleEmbed && (
+                        <button onClick={onToggleEmbed} className="text-white/80 hover:text-white p-2 rounded-full hover:bg-white/10 transition-colors" title={isEmbedded ? "Agrandir" : "Réduire"}>
+                             {isEmbedded ? <Expand size={20} /> : <Shrink size={20} />}
                         </button>
-                    </div>
+                    )}
+                    <button onClick={onClose} className="text-white/80 hover:text-white p-2 rounded-full hover:bg-white/10 transition-colors">
+                        <X size={24} />
+                    </button>
                 </div>
             </div>
         )}
@@ -748,53 +758,62 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
             </div>
         )}
 
-        {/* Bottom Controls (VLC Style) */}
-        <div className={`absolute bottom-0 left-0 right-0 bg-[#111111]/95 backdrop-blur-md border-t border-white/10 transition-transform duration-300 z-30 pb-2 ${showControls ? 'translate-y-0' : 'translate-y-full'}`}>
+        {/* Bottom Controls Container */}
+        <div className={`absolute bottom-0 left-0 right-0 bg-gradient-to-t from-[#0f1115] via-[#0f1115]/95 to-transparent transition-transform duration-300 z-30 pt-32 pb-6 px-8 ${showControls ? 'translate-y-0' : 'translate-y-full'}`}>
             
-            {/* Live TV EPG Overlay */}
-            {type === 'live' && epgNow && (
-                <div className={`px-4 pt-3 pb-1 border-b border-white/5 animate-in slide-in-from-bottom-2 ${isMini ? 'pt-1 pb-0 px-2' : ''}`}>
-                    <div className="flex items-end justify-between mb-1">
-                         <div className="min-w-0 flex-1 mr-4">
-                             {!isMini && (
-                                 <div className="flex items-center gap-2 mb-1">
-                                     <h3 className="text-white font-bold text-lg truncate leading-tight drop-shadow-sm">{epgNow.title}</h3>
-                                     <span className="text-xs text-fluent-accent font-mono bg-fluent-accent/10 px-1.5 py-0.5 rounded border border-fluent-accent/20">
-                                         {formatEpgTime(epgNow.start_timestamp)} - {formatEpgTime(epgNow.stop_timestamp)}
-                                     </span>
-                                 </div>
-                             )}
-                             {isMini && (
-                                 <div className="text-[10px] text-white font-bold truncate mb-0.5">{epgNow.title}</div>
-                             )}
-                             {!isMini && epgNext && (
-                                 <div className="text-white/50 text-xs truncate flex items-center gap-1">
-                                     <span className="uppercase font-bold tracking-wider text-[10px] opacity-70">À suivre :</span> 
-                                     <span className="text-white/70">{epgNext.title}</span>
-                                     <span className="opacity-50">({formatEpgTime(epgNext.start_timestamp)})</span>
-                                 </div>
-                             )}
-                         </div>
-                         <div className={`text-xs font-mono text-fluent-accent/80 font-bold mb-1 ${isMini ? 'text-[9px] mb-0' : ''}`}>
-                             {Math.round(epgProgress)}%
-                         </div>
+            {/* Info Section (Live TV) */}
+            {!isMini && type === 'live' && (
+                <div className="flex items-start gap-6 mb-8">
+                    <div className="w-32 h-32 bg-black/40 rounded-xl flex items-center justify-center p-2 shrink-0 shadow-lg">
+                        {currentItem?.stream_icon ? <img src={currentItem.stream_icon} className="max-w-full max-h-full object-contain" /> : <Tv size={48} className="text-white/20" />}
                     </div>
-                    <div className={`w-full h-1 bg-white/10 rounded-full overflow-hidden ${isMini ? 'h-0.5' : ''}`}>
-                        <div 
-                           className="h-full bg-fluent-accent shadow-[0_0_8px_rgba(96,205,255,0.6)] transition-all duration-1000 ease-linear"
-                           style={{ width: `${epgProgress}%` }}
-                        />
+                    <div className="flex-1 min-w-0 flex flex-col justify-center h-32">
+                        <h2 className="text-3xl font-bold text-white mb-2 truncate drop-shadow-md">{epgNow?.title || decodeBase64(title)}</h2>
+                        {epgNow && (
+                            <div className="flex items-center gap-3 text-sm text-white/70 font-medium mb-2">
+                                <span>{formatEpgTime(epgNow.start_timestamp)} - {formatEpgTime(epgNow.stop_timestamp)}</span>
+                                <span className="w-1 h-1 rounded-full bg-white/50" />
+                                <span>{Math.round((epgNow.stop_timestamp - epgNow.start_timestamp) / 60)} min</span>
+                                {currentItem?.num && (
+                                    <>
+                                        <span className="w-1 h-1 rounded-full bg-white/50" />
+                                        <span className="text-white font-bold">{currentItem.num}</span>
+                                    </>
+                                )}
+                            </div>
+                        )}
+                        <p className="text-white/60 text-sm line-clamp-2 mb-2">{epgNow?.description || (currentItem as any)?.plot || "Aucune information disponible"}</p>
+                        {epgNext && (
+                            <div className="text-white/50 text-sm truncate flex items-center gap-2">
+                                <span>{formatEpgTime(epgNext.start_timestamp)} - {formatEpgTime(epgNext.stop_timestamp)}</span>
+                                <span className="text-white/80">{epgNext.title}</span>
+                            </div>
+                        )}
                     </div>
                 </div>
             )}
 
-            {/* Row 1: Timeline (Seek Bar) - VOD Only */}
-            {type !== 'live' ? (
-                <div className={`w-full relative h-1.5 bg-white/20 cursor-pointer group hover:h-3 transition-all ${isMini ? 'h-1' : ''}`}>
-                     <div 
-                        className="absolute top-0 left-0 h-full bg-orange-500 shadow-[0_0_10px_rgba(249,115,22,0.5)]" 
-                        style={{ width: `${(currentTime / duration) * 100}%` }} 
-                    />
+            {/* Info Section (VOD/Series) */}
+            {!isMini && type !== 'live' && (
+                <div className="mb-8">
+                    <h2 className="text-3xl font-bold text-white mb-2 truncate drop-shadow-md">{decodeBase64(title)}</h2>
+                    <div className="text-white/70 text-sm font-medium">
+                        {formatTime(currentTime)} / {formatTime(duration)}
+                    </div>
+                </div>
+            )}
+
+            {/* Timeline */}
+            <div className="relative h-1.5 bg-white/20 rounded-full mb-6 cursor-pointer group">
+                <div 
+                    className="absolute top-0 left-0 h-full bg-[#2196f3] rounded-full" 
+                    style={{ width: `${type === 'live' ? epgProgress : (currentTime / duration) * 100}%` }} 
+                />
+                <div 
+                    className="absolute top-1/2 -translate-y-1/2 w-3.5 h-3.5 bg-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity" 
+                    style={{ left: `${type === 'live' ? epgProgress : (currentTime / duration) * 100}%`, transform: 'translate(-50%, -50%)' }} 
+                />
+                {type !== 'live' && (
                     <input 
                         type="range" 
                         min="0" 
@@ -803,285 +822,264 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                         onChange={handleSeek}
                         className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                     />
+                )}
+            </div>
+
+            {/* Channels/VOD/Episodes List (Layer 2) */}
+            {!isMini && activeMenu === 'channels' && playlist && (
+                <div className="flex overflow-x-auto gap-3 pb-6 custom-scrollbar mb-2 animate-in slide-in-from-bottom-4">
+                    {type === 'live' && (
+                        <div className="w-40 h-28 shrink-0 bg-[#1e2228] hover:bg-[#2a2f38] rounded-lg flex flex-col items-center justify-center cursor-pointer transition-colors border border-transparent shadow-lg">
+                            <ListVideo size={36} className="text-white/80 mb-2" />
+                            <span className="text-white/90 text-sm font-medium">TV guide</span>
+                        </div>
+                    )}
+                    {playlist.map((item, index) => {
+                        let isActive = false;
+                        let title = '';
+                        let subtitle = '';
+                        let id = '';
+                        let numberText = '';
+                        let imageSrc = '';
+
+                        if (type === 'live' || type === 'vod') {
+                            isActive = currentItem ? item.stream_id === currentItem.stream_id : false;
+                            title = decodeBase64(item.name);
+                            id = `channel-${item.stream_id}`;
+                            numberText = `${index + 1}`;
+                            if (type === 'live') {
+                                subtitle = isActive && epgNow ? epgNow.title : "Programme en cours";
+                            } else if (type === 'vod') {
+                                imageSrc = item.stream_icon;
+                            }
+                        } else if (type === 'series') {
+                            isActive = url.includes(`/${item.id}.`);
+                            title = item.title ? decodeBase64(item.title) : `Épisode ${item.episode_num}`;
+                            id = `episode-${item.id}`;
+                            numberText = `E${item.episode_num}`;
+                            imageSrc = item.info?.movie_image || currentItem?.cover;
+                        }
+
+                        return (
+                            <div 
+                                key={id}
+                                id={id}
+                                onClick={() => onChannelSelect && onChannelSelect(item)}
+                                className={`w-48 h-28 shrink-0 rounded-lg flex flex-col cursor-pointer transition-all border shadow-lg overflow-hidden relative group ${isActive ? 'border-[#2196f3] ring-2 ring-[#2196f3]' : 'border-transparent hover:border-white/20'}`}
+                            >
+                                {imageSrc ? (
+                                    <>
+                                        <img src={imageSrc} alt={title} className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:opacity-80 transition-opacity" loading="lazy" />
+                                        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent" />
+                                        <div className="relative z-10 flex flex-col h-full p-3 justify-end">
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <span className="text-white/90 text-xs font-bold bg-black/60 px-1.5 py-0.5 rounded backdrop-blur-sm">{numberText}</span>
+                                            </div>
+                                            <span className="text-white text-sm font-bold line-clamp-2 leading-tight drop-shadow-md">{title}</span>
+                                            {subtitle && (
+                                                <div className="text-white/70 text-xs line-clamp-1 mt-1">
+                                                    {subtitle}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </>
+                                ) : (
+                                    <div className={`w-full h-full flex flex-col p-3 ${isActive ? 'bg-[#1565c0]' : 'bg-[#1e2228] group-hover:bg-[#2a2f38]'}`}>
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <span className="text-white/60 text-xs font-bold">{numberText}</span>
+                                            <span className="text-white text-sm font-bold truncate flex-1">{title}</span>
+                                        </div>
+                                        {subtitle && (
+                                            <div className="text-white/70 text-xs line-clamp-2 mt-auto leading-tight">
+                                                {subtitle}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        )
+                    })}
                 </div>
-            ) : !epgNow && (
-                <div className="w-full h-[1px] bg-white/10 mb-1" />
             )}
 
-            {/* Row 2: Control Buttons */}
-            <div className={`flex items-center justify-between px-4 py-2 ${isMini ? 'px-2 py-1 gap-1' : ''}`}>
-                <div className="flex items-center gap-4">
-                    <button onClick={togglePlay} className="text-white hover:text-orange-400 transition-colors" title={isPlaying ? "Pause" : "Lecture"}>
-                        {isPlaying ? <Pause size={isMini ? 18 : 24} fill="currentColor" /> : <Play size={isMini ? 18 : 24} fill="currentColor" />}
+            {/* Base Controls (Layer 1) */}
+            <div className="grid grid-cols-3 items-start">
+                {/* Left Controls */}
+                <div className="flex items-center justify-start gap-6 mt-2">
+                    <button onClick={() => setActiveMenu(activeMenu === 'channels' ? 'none' : 'channels')} className={`flex flex-col items-center gap-1.5 transition-colors ${activeMenu === 'channels' ? 'text-[#2196f3]' : 'text-white/70 hover:text-white'}`}>
+                        {type === 'live' ? <ListVideo size={24} /> : type === 'vod' ? <Film size={24} /> : <Tv size={24} />}
+                        <span className="text-[10px] font-medium">
+                            {type === 'live' ? 'Liste des Chaînes' : type === 'vod' ? 'Liste des Films' : 'Épisodes'}
+                        </span>
                     </button>
-                    
-                    {!isMini && (
-                        <button onClick={handleStop} className="text-white/70 hover:text-white transition-colors" title="Arrêter">
-                            <Square size={18} fill="currentColor" />
-                        </button>
-                    )}
+                </div>
 
-                    <div className={`flex items-center gap-1 ${isMini ? 'gap-0.5' : 'mx-2'}`}>
-                        {type === 'live' ? (
+                {/* Center Controls (Play/Pause & Advanced Toggle) */}
+                <div className="flex flex-col items-center justify-center">
+                    <div className="flex items-center gap-6">
+                        {type !== 'live' ? (
                             <>
-                                <button onClick={() => changeChannel('prev')} className="text-white/70 hover:text-white p-1 hover:bg-white/10 rounded" title="Chaîne précédente">
-                                    <SkipBack size={isMini ? 14 : 18} />
+                                <button onClick={() => skip(-10)} className="text-white/70 hover:text-white p-2 hover:bg-white/10 rounded-full transition-colors relative group" title="Reculer de 10s">
+                                    <RotateCcw size={24} />
+                                    <span className="absolute text-[8px] font-bold top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 mt-[1px]">10</span>
                                 </button>
-                                <button onClick={() => changeChannel('next')} className="text-white/70 hover:text-white p-1 hover:bg-white/10 rounded" title="Chaîne suivante">
-                                    <SkipForward size={isMini ? 14 : 18} />
+                                <button onClick={togglePlay} className="text-white hover:text-[#2196f3] p-3 bg-white/10 hover:bg-white/20 rounded-full transition-colors">
+                                    {isPlaying ? <Pause size={32} fill="currentColor" /> : <Play size={32} fill="currentColor" />}
+                                </button>
+                                <button onClick={() => skip(10)} className="text-white/70 hover:text-white p-2 hover:bg-white/10 rounded-full transition-colors relative group" title="Avancer de 10s">
+                                    <RotateCw size={24} />
+                                    <span className="absolute text-[8px] font-bold top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 mt-[1px]">10</span>
                                 </button>
                             </>
                         ) : (
                             <>
-                                <button onClick={() => skip(-10)} className="text-white/70 hover:text-white p-1 hover:bg-white/10 rounded" title="-10s">
-                                    <SkipBack size={isMini ? 14 : 18} />
+                                <button onClick={() => changeChannel('prev')} className="text-white/70 hover:text-white p-2 hover:bg-white/10 rounded-full transition-colors" title="Chaîne précédente">
+                                    <SkipBack size={24} />
                                 </button>
-                                <button onClick={() => skip(10)} className="text-white/70 hover:text-white p-1 hover:bg-white/10 rounded" title="+10s">
-                                    <SkipForward size={isMini ? 14 : 18} />
+                                <button onClick={togglePlay} className="text-white hover:text-[#2196f3] p-3 bg-white/10 hover:bg-white/20 rounded-full transition-colors">
+                                    {isPlaying ? <Pause size={32} fill="currentColor" /> : <Play size={32} fill="currentColor" />}
+                                </button>
+                                <button onClick={() => changeChannel('next')} className="text-white/70 hover:text-white p-2 hover:bg-white/10 rounded-full transition-colors" title="Chaîne suivante">
+                                    <SkipForward size={24} />
                                 </button>
                             </>
                         )}
                     </div>
+                    <button onClick={() => setShowAdvancedControls(!showAdvancedControls)} className={`mt-2 text-white/50 hover:text-white transition-colors p-1 rounded-full hover:bg-white/10`}>
+                        <ChevronDown size={20} className={`transition-transform duration-300 ${showAdvancedControls ? 'rotate-180' : ''}`} />
+                    </button>
+                </div>
 
+                {/* Right Controls (Volume & Stop) */}
+                <div className="flex items-center justify-end gap-6 mt-2">
+                    <button onClick={handleStop} className="flex flex-col items-center gap-1.5 transition-colors text-white/70 hover:text-white" title="Arrêter">
+                        <Square size={20} fill="currentColor" />
+                        <span className="text-[10px] font-medium">Arrêter</span>
+                    </button>
                     <div className="flex items-center gap-2 group">
-                        <button onClick={toggleMute} className="text-white/80 hover:text-white" title="Volume">
-                             {isMuted ? <VolumeX size={isMini ? 16 : 20} /> : <Volume2 size={isMini ? 16 : 20} />}
+                        <button onClick={toggleMute} className="text-white/70 hover:text-white transition-colors p-2 hover:bg-white/10 rounded-full">
+                            {isMuted || volume === 0 ? <VolumeX size={24} /> : <Volume2 size={24} />}
                         </button>
-                        {!isMini && (
-                            <input 
-                                type="range" 
-                                min="0" 
-                                max="1" 
-                                step="0.05" 
-                                value={volume} 
-                                onChange={handleVolumeChange}
-                                className="w-20 h-1 bg-white/30 rounded-lg appearance-none cursor-pointer accent-fluent-accent opacity-0 group-hover:opacity-100 transition-opacity" 
-                            />
-                        )}
+                        <input 
+                            type="range" 
+                            min="0" 
+                            max="1" 
+                            step="0.05" 
+                            value={isMuted ? 0 : volume} 
+                            onChange={handleVolumeChange}
+                            className="w-0 group-hover:w-20 transition-all duration-300 opacity-0 group-hover:opacity-100 cursor-pointer accent-[#2196f3]"
+                        />
                     </div>
                 </div>
+            </div>
 
-                <div className={`flex items-center gap-4 ${isMini ? 'gap-1' : ''}`}>
-                    {!isMini && type !== 'live' && (
-                        <div className="text-xs font-mono text-white/80 select-none">
-                            <span>{formatTime(currentTime)}</span>
-                            <span className="mx-1 text-white/40">/</span>
-                            <span>{formatTime(duration)}</span>
-                        </div>
-                    )}
+            {/* Advanced Controls (Layer 2) */}
+            {showAdvancedControls && (
+                <div className="flex items-center justify-center gap-8 mt-6 pt-6 border-t border-white/5 animate-in slide-in-from-top-2">
+                    <button className="flex flex-col items-center gap-1.5 transition-colors text-white/70 hover:text-white">
+                        <Search size={24} />
+                        <span className="text-[10px] font-medium">Rechercher</span>
+                    </button>
+                    <button className="flex flex-col items-center gap-1.5 transition-colors text-white/70 hover:text-white">
+                        <MonitorPlay size={24} />
+                        <span className="text-[10px] font-medium">Multi-Vue</span>
+                    </button>
+                    <button className="flex flex-col items-center gap-1.5 transition-colors text-white/70 hover:text-white">
+                        <PictureInPicture size={24} />
+                        <span className="text-[10px] font-medium">PiP</span>
+                    </button>
                     
-                    {!isMini && type === 'live' && (
-                        <div className="flex items-center gap-2 px-2 py-1 bg-red-500/10 border border-red-500/20 rounded text-red-500 text-[10px] font-bold uppercase tracking-widest animate-pulse select-none">
-                            <div className="w-1.5 h-1.5 bg-red-500 rounded-full" /> Live
-                        </div>
-                    )}
-
-                    {!isMini && <div className="h-4 w-[1px] bg-white/10 mx-1" />}
-
-                    {!isMini && type === 'live' && (
-                        <button 
-                            onClick={() => setIsSidebarOpen(!isSidebarOpen)} 
-                            className={`transition-colors ${isSidebarOpen ? 'text-fluent-accent' : 'text-white/70 hover:text-white'}`}
-                            title="Liste des chaînes"
-                        >
-                            <List size={20} />
+                    <div className="relative flex flex-col items-center">
+                        <button onClick={() => setActiveMenu(activeMenu === 'audio' ? 'none' : 'audio')} className={`flex flex-col items-center gap-1.5 transition-colors ${activeMenu === 'audio' ? 'text-[#2196f3]' : 'text-white/70 hover:text-white'}`}>
+                            <AudioLines size={24} />
+                            <span className="text-[10px] font-medium">{audioTracks.length > 0 && currentAudioTrack !== -1 ? audioTracks.find(t => t.id === currentAudioTrack)?.lang || 'Audio' : 'Audio'}</span>
                         </button>
-                    )}
-
-                    {!isMini && (
-                        <button onClick={() => setShowInfo(!showInfo)} className={`transition-colors ${showInfo ? 'text-fluent-accent' : 'text-white/70 hover:text-white'}`} title="Informations">
-                            <Info size={20} />
-                        </button>
-                    )}
-
-                    {!isMini && audioTracks.length > 1 && (
-                        <div className="relative">
-                            <button 
-                                onClick={() => {
-                                    setShowAudioMenu(!showAudioMenu);
-                                    setShowSubtitleMenu(false);
-                                    setIsSettingsOpen(false);
-                                }} 
-                                className={`transition-colors ${showAudioMenu ? 'text-fluent-accent' : 'text-white/70 hover:text-white'}`} 
-                                title="Pistes Audio"
-                            >
-                                <AudioLines size={20} />
-                            </button>
-
-                            {showAudioMenu && (
-                                <div className="absolute bottom-full right-0 mb-4 w-48 bg-[#1e1e1e] border border-white/10 rounded-xl shadow-2xl p-4 z-50 animate-in slide-in-from-bottom-2">
-                                    <h4 className="text-xs font-bold text-white/50 uppercase tracking-widest mb-3">Pistes Audio</h4>
-                                    <div className="space-y-1 max-h-48 overflow-y-auto custom-scrollbar">
-                                        {audioTracks.map((track) => {
-                                            const isSelected = currentAudioTrack === track.id || (currentAudioTrack === -1 && track.id === 0);
-                                            return (
-                                                <button
-                                                    key={track.id}
-                                                    onClick={() => {
-                                                        if (hlsRef.current) {
-                                                            hlsRef.current.audioTrack = track.id;
-                                                            setCurrentAudioTrack(track.id);
-                                                        }
-                                                        setShowAudioMenu(false);
-                                                    }}
-                                                    className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors flex items-center justify-between
-                                                        ${isSelected 
-                                                            ? 'bg-fluent-accent text-black font-bold' 
-                                                            : 'text-white/80 hover:bg-white/5'}`}
-                                                >
-                                                    <span className="truncate">{track.name || track.lang || `Piste ${track.id + 1}`}</span>
-                                                    {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-black shrink-0 ml-2" />}
-                                                </button>
-                                            );
-                                        })}
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    )}
-
-                    {!isMini && subtitleTracks.length > 0 && (
-                        <div className="relative">
-                            <button 
-                                onClick={() => {
-                                    setShowSubtitleMenu(!showSubtitleMenu);
-                                    setShowAudioMenu(false);
-                                    setIsSettingsOpen(false);
-                                }} 
-                                className={`transition-colors ${showSubtitleMenu ? 'text-fluent-accent' : 'text-white/70 hover:text-white'}`} 
-                                title="Sous-titres"
-                            >
-                                <Captions size={20} />
-                            </button>
-
-                            {showSubtitleMenu && (
-                                <div className="absolute bottom-full right-0 mb-4 w-48 bg-[#1e1e1e] border border-white/10 rounded-xl shadow-2xl p-4 z-50 animate-in slide-in-from-bottom-2">
-                                    <h4 className="text-xs font-bold text-white/50 uppercase tracking-widest mb-3">Sous-titres</h4>
-                                    <div className="space-y-1 max-h-48 overflow-y-auto custom-scrollbar">
-                                        <button
-                                            onClick={() => {
-                                                if (hlsRef.current) {
-                                                    hlsRef.current.subtitleTrack = -1;
-                                                    setCurrentSubtitleTrack(-1);
-                                                }
-                                                setShowSubtitleMenu(false);
-                                            }}
-                                            className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors flex items-center justify-between
-                                                ${currentSubtitleTrack === -1 
-                                                    ? 'bg-fluent-accent text-black font-bold' 
-                                                    : 'text-white/80 hover:bg-white/5'}`}
-                                        >
-                                            <span>Désactivés</span>
-                                            {currentSubtitleTrack === -1 && <div className="w-1.5 h-1.5 rounded-full bg-black shrink-0 ml-2" />}
-                                        </button>
-                                        
-                                        {subtitleTracks.map((track) => {
-                                            const isSelected = currentSubtitleTrack === track.id;
-                                            return (
-                                                <button
-                                                    key={track.id}
-                                                    onClick={() => {
-                                                        if (hlsRef.current) {
-                                                            hlsRef.current.subtitleTrack = track.id;
-                                                            setCurrentSubtitleTrack(track.id);
-                                                        }
-                                                        setShowSubtitleMenu(false);
-                                                    }}
-                                                    className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors flex items-center justify-between
-                                                        ${isSelected 
-                                                            ? 'bg-fluent-accent text-black font-bold' 
-                                                            : 'text-white/80 hover:bg-white/5'}`}
-                                                >
-                                                    <span className="truncate">{track.name || track.lang || `Piste ${track.id + 1}`}</span>
-                                                    {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-black shrink-0 ml-2" />}
-                                                </button>
-                                            );
-                                        })}
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    )}
-
-                    {!isMini && (
-                        <div className="relative">
-                            <button 
-                                onClick={() => {
-                                    setIsSettingsOpen(!isSettingsOpen);
-                                    setShowAudioMenu(false);
-                                    setShowSubtitleMenu(false);
-                                }} 
-                                className={`transition-colors ${isSettingsOpen ? 'text-fluent-accent' : 'text-white/70 hover:text-white'}`} 
-                                title="Paramètres"
-                            >
-                                <Settings size={20} />
-                            </button>
-
-                            {isSettingsOpen && (
-                                <div className="absolute bottom-full right-0 mb-4 w-64 bg-[#1e1e1e] border border-white/10 rounded-xl shadow-2xl p-4 z-50 animate-in slide-in-from-bottom-2">
-                                    <h4 className="text-xs font-bold text-white/50 uppercase tracking-widest mb-3">Reconnexion auto</h4>
-                                    <div className="space-y-1">
-                                        {[
-                                            { label: 'Progressive', value: 'progressive' },
-                                            { label: '2 secondes', value: 2000 },
-                                            { label: '3 secondes', value: 3000 },
-                                            { label: '5 secondes', value: 5000 }
-                                        ].map((opt) => (
+                        {activeMenu === 'audio' && (
+                            <div className="absolute bottom-full right-0 mb-4 w-48 bg-[#1e1e1e] border border-white/10 rounded-xl shadow-2xl p-4 z-50 animate-in slide-in-from-bottom-2">
+                                <h4 className="text-xs font-bold text-white/50 uppercase tracking-widest mb-3">Pistes Audio</h4>
+                                <div className="space-y-1 max-h-48 overflow-y-auto custom-scrollbar">
+                                    {audioTracks.length === 0 ? (
+                                        <div className="text-sm text-white/50 px-3 py-2">Aucune piste détectée</div>
+                                    ) : audioTracks.map((track) => {
+                                        const isSelected = currentAudioTrack === track.id || (currentAudioTrack === -1 && track.id === 0);
+                                        return (
                                             <button
-                                                key={opt.label}
+                                                key={track.id}
                                                 onClick={() => {
-                                                    updatePlayerSettings({ reconnectDelay: opt.value as any });
-                                                    setIsSettingsOpen(false);
+                                                    if (hlsRef.current) {
+                                                        hlsRef.current.audioTrack = track.id;
+                                                        setCurrentAudioTrack(track.id);
+                                                    }
+                                                    setActiveMenu('none');
                                                 }}
                                                 className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors flex items-center justify-between
-                                                    ${playerSettings.reconnectDelay === opt.value 
-                                                        ? 'bg-fluent-accent text-black font-bold' 
-                                                        : 'text-white/80 hover:bg-white/5'}`}
+                                                    ${isSelected ? 'bg-[#2196f3] text-white font-bold' : 'text-white/80 hover:bg-white/5'}`}
                                             >
-                                                {opt.label}
-                                                {playerSettings.reconnectDelay === opt.value && <div className="w-1.5 h-1.5 rounded-full bg-black" />}
+                                                <span className="truncate">{track.name || track.lang || `Piste ${track.id + 1}`}</span>
+                                                {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white shrink-0 ml-2" />}
                                             </button>
-                                        ))}
-                                    </div>
-                                    <div className="mt-4 pt-3 border-t border-white/5 text-[10px] text-white/40 leading-tight">
-                                        Définit le délai avant de tenter une reconnexion en cas de perte de signal.
-                                    </div>
+                                        );
+                                    })}
                                 </div>
-                            )}
-                        </div>
-                    )}
-                    
-                    {isMini && onToggleEmbed && (
-                         <button onClick={onToggleEmbed} className="text-white/70 hover:text-white p-1 hover:bg-white/10 rounded" title="Élargir dans l'EPG">
-                            <Expand size={16} />
-                        </button>
-                    )}
+                            </div>
+                        )}
+                    </div>
 
-                    {(isMini || isEmbedded) && onFullWindow && (
-                         <button onClick={onFullWindow} className="text-white/70 hover:text-white p-1 hover:bg-white/10 rounded" title="Plein écran (Fenêtre)">
-                            <Maximize size={isMini ? 16 : 20} />
+                    <div className="relative flex flex-col items-center">
+                        <button onClick={() => setActiveMenu(activeMenu === 'subtitles' ? 'none' : 'subtitles')} className={`flex flex-col items-center gap-1.5 transition-colors ${activeMenu === 'subtitles' ? 'text-[#2196f3]' : 'text-white/70 hover:text-white'}`}>
+                            <Captions size={24} />
+                            <span className="text-[10px] font-medium">{currentSubtitleTrack === -1 ? 'Off' : subtitleTracks.find(t => t.id === currentSubtitleTrack)?.lang || 'CC'}</span>
                         </button>
-                    )}
+                        {activeMenu === 'subtitles' && (
+                            <div className="absolute bottom-full right-0 mb-4 w-48 bg-[#1e1e1e] border border-white/10 rounded-xl shadow-2xl p-4 z-50 animate-in slide-in-from-bottom-2">
+                                <h4 className="text-xs font-bold text-white/50 uppercase tracking-widest mb-3">Sous-titres</h4>
+                                <div className="space-y-1 max-h-48 overflow-y-auto custom-scrollbar">
+                                    <button
+                                        onClick={() => {
+                                            if (hlsRef.current) {
+                                                hlsRef.current.subtitleTrack = -1;
+                                                setCurrentSubtitleTrack(-1);
+                                            }
+                                            setActiveMenu('none');
+                                        }}
+                                        className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors flex items-center justify-between
+                                            ${currentSubtitleTrack === -1 ? 'bg-[#2196f3] text-white font-bold' : 'text-white/80 hover:bg-white/5'}`}
+                                    >
+                                        <span>Désactivés</span>
+                                        {currentSubtitleTrack === -1 && <div className="w-1.5 h-1.5 rounded-full bg-white shrink-0 ml-2" />}
+                                    </button>
+                                    
+                                    {subtitleTracks.map((track) => {
+                                        const isSelected = currentSubtitleTrack === track.id;
+                                        return (
+                                            <button
+                                                key={track.id}
+                                                onClick={() => {
+                                                    if (hlsRef.current) {
+                                                        hlsRef.current.subtitleTrack = track.id;
+                                                        setCurrentSubtitleTrack(track.id);
+                                                    }
+                                                    setActiveMenu('none');
+                                                }}
+                                                className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors flex items-center justify-between
+                                                    ${isSelected ? 'bg-[#2196f3] text-white font-bold' : 'text-white/80 hover:bg-white/5'}`}
+                                            >
+                                                <span className="truncate">{track.name || track.lang || `Piste ${track.id + 1}`}</span>
+                                                {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white shrink-0 ml-2" />}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
+                    </div>
 
-                    {onRestore && (
-                         <button onClick={onRestore} className="text-white/70 hover:text-white p-1 hover:bg-white/10 rounded" title="Retour à la vue section">
-                            <Columns size={isMini ? 16 : 20} />
-                        </button>
-                    )}
-                    
-                    {!isMini && onToggleEmbed && (
-                         <button onClick={onToggleEmbed} className="text-white/70 hover:text-white" title={isEmbedded ? (onFullWindow ? "Réduire dans l'EPG" : "Plein écran (Fenêtre)") : "Réduire"}>
-                            {isEmbedded ? (onFullWindow ? <Shrink size={20} /> : <Expand size={20} />) : <Shrink size={20} />}
-                        </button>
-                    )}
-
-                    {!isMini && (
-                        <button onClick={toggleFullscreen} className="text-white/70 hover:text-white" title="Plein écran (Navigateur)">
-                            {isFullscreen ? <Minimize size={20} /> : <Maximize size={20} />}
-                        </button>
-                    )}
+                    <button onClick={toggleFullscreen} className="flex flex-col items-center gap-1.5 transition-colors text-white/70 hover:text-white">
+                        {isFullscreen ? <Minimize size={24} /> : <Maximize size={24} />}
+                        <span className="text-[10px] font-medium">Plein écran</span>
+                    </button>
                 </div>
-            </div>
+            )}
         </div>
     </div>
   );
