@@ -88,6 +88,7 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
   const heroDetailRef = useRef<any>(null);
   const isTrailerMutedRef = useRef(true);
   const preselectionHandledRef = useRef<string | null>(null);
+  const autoPlayedRef = useRef<string | null>(null);
 
   const { isFavorite, getFavorites } = useUserPreferences(account.id);
   const [loading, setLoading] = useState(true);
@@ -403,7 +404,7 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
         const catData = await cacheService.getCategories(account, type);
         if (Array.isArray(catData)) setCategories(catData);
 
-        if (uiMode === 'flow') {
+        if (uiMode === 'flow' || preselectedItemId) {
             const listData = await cacheService.getStreams(account, type);
             if (workerRef.current) {
                 // Use worker to group data
@@ -429,7 +430,7 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
         setError("Erreur lors du chargement des catégories et des flux."); 
         setLoading(false);
     }
-  }, [account, type, uiMode]);
+  }, [account, type, uiMode, preselectedItemId]);
 
   useEffect(() => { 
     loadCategories(); 
@@ -648,6 +649,36 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
       }
   }, [currentLevel, selectedCategory, account.id, type, navigate]);
 
+  // Handle Auto-play for preselected items (Moved after handlePlay/handlePlayEpisode declarations)
+  useEffect(() => {
+    if (loading || fullData.length === 0 || !preselectedItemId) return;
+    if (autoPlayedRef.current === preselectedItemId) return;
+
+    const itemIdStr = preselectedItemId.toString();
+    const item = fullData.find(i => i.stream_id?.toString() === itemIdStr || i.series_id?.toString() === itemIdStr);
+    
+    if (item) {
+        if (type === 'live' || type === 'vod') {
+            handlePlay(item);
+            autoPlayedRef.current = preselectedItemId;
+        } else if (type === 'series') {
+            // For series, we wait for detailData to be loaded to play the first episode
+            if (currentLevel === 'detail' && detailData && selectedItem?.series_id?.toString() === itemIdStr) {
+                const seasons = Object.keys(detailData.episodes).sort((a,b) => parseInt(a)-parseInt(b));
+                if (seasons.length > 0) {
+                    const firstSeason = detailData.episodes[seasons[0]];
+                    if (firstSeason && firstSeason.length > 0) {
+                        handlePlayEpisode(firstSeason[0]);
+                        autoPlayedRef.current = preselectedItemId;
+                    }
+                }
+            }
+        }
+    } else {
+        autoPlayedRef.current = null;
+    }
+  }, [loading, fullData, preselectedItemId, type, currentLevel, detailData, selectedItem, handlePlay, handlePlayEpisode]);
+
   const handleGridClick = (item: XtreamStream) => {
       if (type === 'live') handlePlay(item);
       else handleDetail(item);
@@ -853,7 +884,7 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
                                                         onClose={handleClosePlayer}
                                                         playlist={playerPlaylist}
                                                         currentItem={player.currentItem}
-                                                        onChannelSelect={type === 'series' ? handlePlayEpisode : handlePlay}
+                                                        onChannelSelect={handlePlay}
                                                         isEmbedded={true}
                                                         isMini={!isPlayerExpanded}
                                                         onToggleEmbed={() => setIsPlayerExpanded(!isPlayerExpanded)}
@@ -987,7 +1018,7 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
                                             onClose={handleClosePlayer}
                                             playlist={playerPlaylist}
                                             currentItem={player.currentItem}
-                                            onChannelSelect={type === 'series' ? handlePlayEpisode : handlePlay}
+                                            onChannelSelect={handlePlay}
                                             isEmbedded={true}
                                             isMini={!isPlayerExpanded}
                                             onToggleEmbed={() => setIsPlayerExpanded(!isPlayerExpanded)}
