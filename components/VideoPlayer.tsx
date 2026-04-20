@@ -492,7 +492,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         video.onerror = null;
       }
     };
-  }, [url, retryCount]); 
+  }, [url, retryCount, playerSettings.bufferSize]); 
 
   // Handle Controls Visibility
   const handleMouseMove = () => {
@@ -1077,6 +1077,69 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                                             </button>
                                         );
                                     })}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="relative flex flex-col items-center">
+                        <button onClick={() => setActiveMenu(activeMenu === 'settings' ? 'none' : 'settings')} className={`flex flex-col items-center gap-1.5 transition-colors ${activeMenu === 'settings' ? 'text-[#2196f3]' : 'text-white/70 hover:text-white'}`}>
+                            <Settings size={24} />
+                            <span className="text-[10px] font-medium">Réglages</span>
+                        </button>
+                        {activeMenu === 'settings' && (
+                            <div className="absolute bottom-full right-0 mb-4 w-64 bg-[#1e1e1e] border border-white/10 rounded-xl shadow-2xl p-4 z-50 animate-in slide-in-from-bottom-2">
+                                <h4 className="text-xs font-bold text-white/50 uppercase tracking-widest mb-3 text-center border-b border-white/5 pb-2">Options de lecture</h4>
+                                
+                                <div className="space-y-4 mt-3">
+                                    <div>
+                                        <p className="text-[10px] font-bold text-white/30 uppercase mb-2 ml-1">Mémoire tampon (Buffer)</p>
+                                        <div className="grid grid-cols-1 gap-1">
+                                            {[
+                                                { id: 'small', label: 'Petite', desc: 'Latence faible, risques de coupures' },
+                                                { id: 'normal', label: 'Normale', desc: 'Équilibre recommandé (30s)' },
+                                                { id: 'large', label: 'Grande', desc: 'Stabilité maximale, long délai' }
+                                            ].map((opt) => (
+                                                <button
+                                                    key={opt.id}
+                                                    onClick={() => {
+                                                        updatePlayerSettings({ bufferSize: opt.id as any });
+                                                    }}
+                                                    className={`w-full text-left px-3 py-2 rounded-lg transition-all flex flex-col
+                                                        ${(playerSettings.bufferSize === opt.id || (!playerSettings.bufferSize && opt.id === 'normal')) 
+                                                            ? 'bg-[#2196f3] text-white shadow-lg' 
+                                                            : 'text-white/80 hover:bg-white/5'}`}
+                                                >
+                                                    <span className="text-sm font-bold">{opt.label}</span>
+                                                    <span className={`text-[10px] ${(playerSettings.bufferSize === opt.id || (!playerSettings.bufferSize && opt.id === 'normal')) ? 'text-white/70' : 'text-white/40'}`}>
+                                                        {opt.desc}
+                                                    </span>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <p className="text-[10px] font-bold text-white/30 uppercase mb-2 ml-1">Reconnexion auto</p>
+                                        <div className="grid grid-cols-2 gap-1">
+                                            {[
+                                                { id: 2000, label: 'Rapide (2s)' },
+                                                { id: 5000, label: 'Directe (5s)' },
+                                                { id: 'progressive', label: 'Progressive' }
+                                            ].map((opt) => (
+                                                <button
+                                                    key={opt.id.toString()}
+                                                    onClick={() => {
+                                                        updatePlayerSettings({ reconnectDelay: opt.id as any });
+                                                    }}
+                                                    className={`text-center px-2 py-1.5 rounded-lg text-[10px] transition-colors h-10 flex items-center justify-center
+                                                        ${playerSettings.reconnectDelay === opt.id ? 'bg-white/10 text-white font-bold border border-white/20' : 'text-white/50 hover:bg-white/5 border border-transparent'}`}
+                                                >
+                                                    {opt.label}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         )}
