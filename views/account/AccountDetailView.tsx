@@ -125,7 +125,7 @@ export const AccountDetailView: React.FC<{ onBack: () => void; onPlayDownload?: 
   const buildApiUrl = (action: string) => {
     if (!account) return '';
     // Force http for Xtream API calls
-    const targetUrl = `http://${account.host}:${account.port}/player_api.php?username=${account.username}&password=${account.password}&action=${action}`;
+    const targetUrl = `${account.protocol || 'http'}://${account.host}:${account.port}/player_api.php?username=${account.username}&password=${account.password}&action=${action}`;
     return createProxyUrl(targetUrl);
   };
 
@@ -134,7 +134,7 @@ export const AccountDetailView: React.FC<{ onBack: () => void; onPlayDownload?: 
     setLoading(true);
     setError(null);
     // Force http for Xtream API calls
-    const targetUrl = `http://${account.host}:${account.port}/player_api.php?username=${account.username}&password=${account.password}`;
+    const targetUrl = `${account.protocol || 'http'}://${account.host}:${account.port}/player_api.php?username=${account.username}&password=${account.password}`;
     const url = createProxyUrl(targetUrl);
 
     try {
@@ -179,7 +179,7 @@ export const AccountDetailView: React.FC<{ onBack: () => void; onPlayDownload?: 
           // Step 1: Auth Info
           setRevisionProgress({ step: 'Authenticating...', percent: 5, details: 'Verifying credentials and fetching server metadata' });
           // Force http for Xtream API calls
-          const authUrl = createProxyUrl(`http://${account.host}:${account.port}/player_api.php?username=${account.username}&password=${account.password}`);
+          const authUrl = createProxyUrl(`${account.protocol || 'http'}://${account.host}:${account.port}/player_api.php?username=${account.username}&password=${account.password}`);
           const authData = await fetchCached(authUrl);
           results.userInfo = authData.user_info;
           results.serverInfo = authData.server_info;
@@ -230,12 +230,12 @@ export const AccountDetailView: React.FC<{ onBack: () => void; onPlayDownload?: 
     });
 
     // Force http for Xtream API calls
-    const targetUrl = createProxyUrl(`http://${account.host}:${account.port}/player_api.php?username=${account.username}&password=${account.password}`);
+    const targetUrl = createProxyUrl(`${account.protocol || 'http'}://${account.host}:${account.port}/player_api.php?username=${account.username}&password=${account.password}`);
     
     // Use a large request (live streams list) for bandwidth testing.
     // We append a timestamp to bypass cache for the speed test specifically.
     // Force http for Xtream API calls
-    const downloadUrl = createProxyUrl(`http://${account.host}:${account.port}/player_api.php?username=${account.username}&password=${account.password}&action=get_live_streams&_t=${Date.now()}`);
+    const downloadUrl = createProxyUrl(`${account.protocol || 'http'}://${account.host}:${account.port}/player_api.php?username=${account.username}&password=${account.password}&action=get_live_streams&_t=${Date.now()}`);
 
     try {
         // --- Phase 1: Ping & Jitter ---

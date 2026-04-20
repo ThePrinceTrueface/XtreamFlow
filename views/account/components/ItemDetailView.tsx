@@ -116,15 +116,15 @@ export const ItemDetailView: React.FC<ItemDetailViewProps> = ({ item, detail, lo
     const getDownloadUrl = () => {
         if (type !== 'vod') return null;
         const ext = detail?.movie_data?.container_extension || (item as any).container_extension || 'mp4';
-        // Force http for Xtream downloads
-        return `http://${account.host}:${account.port}/movie/${account.username}/${account.password}/${item.stream_id}.${ext}`;
+        // Force protocol for Xtream downloads
+        return `${account.protocol || 'http'}://${account.host}:${account.port}/movie/${account.username}/${account.password}/${item.stream_id}.${ext}`;
     };
     const downloadUrl = getDownloadUrl();
 
     const getEpisodeDownloadUrl = (episode: any) => {
         const ext = episode.container_extension || 'mp4';
-        // Force http for Xtream downloads
-        return `http://${account.host}:${account.port}/series/${account.username}/${account.password}/${episode.id}.${ext}`;
+        // Force protocol for Xtream downloads
+        return `${account.protocol || 'http'}://${account.host}:${account.port}/series/${account.username}/${account.password}/${episode.id}.${ext}`;
     };
 
     const handleDownload = async () => {

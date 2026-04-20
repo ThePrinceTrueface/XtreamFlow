@@ -144,7 +144,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         try {
             // Using get_short_epg for lighter payload
             // Force http for Xtream API calls
-            const apiUrl = `http://${account.host}:${account.port}/player_api.php?username=${account.username}&password=${account.password}&action=get_short_epg&stream_id=${currentItem.stream_id}&limit=4`;
+            const apiUrl = `${account.protocol || 'http'}://${account.host}:${account.port}/player_api.php?username=${account.username}&password=${account.password}&action=get_short_epg&stream_id=${currentItem.stream_id}&limit=4`;
             const proxyUrl = createProxyUrl(apiUrl);
             
             const res = await fetch(proxyUrl);
