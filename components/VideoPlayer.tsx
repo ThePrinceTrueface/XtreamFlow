@@ -847,10 +847,9 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                             title = decodeBase64(item.name);
                             id = `channel-${item.stream_id}`;
                             numberText = `${index + 1}`;
+                            imageSrc = item.stream_icon;
                             if (type === 'live') {
                                 subtitle = isActive && epgNow ? epgNow.title : "Programme en cours";
-                            } else if (type === 'vod') {
-                                imageSrc = item.stream_icon;
                             }
                         } else if (type === 'series') {
                             isActive = url.includes(`/${item.id}.`);
@@ -860,6 +859,8 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                             imageSrc = item.info?.movie_image || currentItem?.cover;
                         }
 
+                        const finalImageSrc = imageSrc ? createProxyUrl(imageSrc) : '';
+
                         return (
                             <div 
                                 key={id}
@@ -867,17 +868,24 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                                 onClick={() => onChannelSelect && onChannelSelect(item)}
                                 className={`w-48 h-28 shrink-0 rounded-lg flex flex-col cursor-pointer transition-all border shadow-lg overflow-hidden relative group ${isActive ? 'border-[#2196f3] ring-2 ring-[#2196f3]' : 'border-transparent hover:border-white/20'}`}
                             >
-                                {imageSrc ? (
+                                {finalImageSrc ? (
                                     <>
-                                        <img src={imageSrc} alt={title} className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:opacity-80 transition-opacity" loading="lazy" />
-                                        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent" />
-                                        <div className="relative z-10 flex flex-col h-full p-3 justify-end">
+                                        <div className="absolute inset-0 bg-[#1e2228]" />
+                                        <img 
+                                            src={finalImageSrc} 
+                                            alt={title} 
+                                            referrerPolicy="no-referrer"
+                                            className={`absolute inset-0 w-full h-full ${type === 'live' ? 'object-contain p-4 opacity-40' : 'object-cover opacity-60'} group-hover:opacity-80 transition-opacity`} 
+                                            loading="lazy" 
+                                        />
+                                        <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/50 to-transparent" />
+                                        <div className="relative z-10 flex flex-col h-full p-3 justify-end pointer-events-none">
                                             <div className="flex items-center gap-2 mb-1">
-                                                <span className="text-white/90 text-xs font-bold bg-black/60 px-1.5 py-0.5 rounded backdrop-blur-sm">{numberText}</span>
+                                                <span className="text-white/90 text-[10px] font-bold bg-black/60 px-1.5 py-0.5 rounded backdrop-blur-sm">{numberText}</span>
                                             </div>
-                                            <span className="text-white text-sm font-bold line-clamp-2 leading-tight drop-shadow-md">{title}</span>
+                                            <span className="text-white text-xs font-bold line-clamp-1 leading-tight drop-shadow-md mb-0.5">{title}</span>
                                             {subtitle && (
-                                                <div className="text-white/70 text-xs line-clamp-1 mt-1">
+                                                <div className="text-fluent-accent text-[10px] font-medium line-clamp-1 group-hover:text-white transition-colors">
                                                     {subtitle}
                                                 </div>
                                             )}
