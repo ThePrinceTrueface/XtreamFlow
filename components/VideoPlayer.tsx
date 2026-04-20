@@ -8,6 +8,7 @@ import {
   RotateCcw, RotateCw, Film
 } from 'lucide-react';
 import Hls from 'hls.js';
+import mpegts from 'mpegts.js';
 import { XtreamStream, XtreamAccount } from '../types';
 import { createProxyUrl, decodeBase64 } from '../utils';
 import { useUserPreferences } from '../hooks/useUserPreferences';
@@ -95,6 +96,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
   // Audio Tracks State
   const hlsRef = useRef<Hls | null>(null);
+  const mpegtsRef = useRef<mpegts.Player | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [audioTracks, setAudioTracks] = useState<{id: number, name: string, lang: string}[]>([]);
   const [currentAudioTrack, setCurrentAudioTrack] = useState<number>(-1);
@@ -265,6 +267,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
     const finalUrl = url;
     const isHls = finalUrl.includes('.m3u8') || url.includes('.m3u8') || type === 'live';
+    const isMpegTs = (finalUrl.toLowerCase().includes('.ts') || finalUrl.toLowerCase().includes('.m2ts')) && !isHls;
     
     // Reset audio and subtitle tracks on new video
     setAudioTracks([]);
@@ -428,6 +431,47 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
             }
         }
       });
+    } else if (isMpegTs && mpegts.getFeatureList().mseLivePlayback) {
+        mpegtsRef.current = mpegts.createPlayer({
+            type: 'mse',
+            isLive: false, // Narrowed type excludes 'live' here
+            url: finalUrl
+        }, {
+            enableWorker: true,
+            stashInitialSize: 128,
+            enableStashBuffer: true
+        });
+        
+        const mplayer = mpegtsRef.current;
+        mplayer.attachMediaElement(video);
+        mplayer.load();
+        
+        mplayer.on(mpegts.Events.ERROR, (type, detail, info) => {
+            console.error("MPEGTS Error", type, detail, info);
+            setError(`Erreur de lecture TS: ${type}`);
+            setIsLoading(true);
+            setIsRetrying(true);
+            if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
+            const delay = getRetryDelay();
+            retryTimeoutRef.current = window.setTimeout(() => {
+                setRetryCount(prev => prev + 1);
+            }, delay);
+        });
+
+        mplayer.on(mpegts.Events.METADATA_ARRIVED, () => {
+            setIsLoading(false);
+            setIsRetrying(false);
+            setError(null);
+            attemptPlay();
+        });
+
+        // Some servers don't trigger METADATA_ARRIVED correctly for VOD
+        const checkLoad = setTimeout(() => {
+            setIsLoading(false);
+            attemptPlay();
+        }, 1000);
+        return () => clearTimeout(checkLoad);
+
     } else {
       video.src = finalUrl;
       video.load();
@@ -478,6 +522,10 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       if (hlsRef.current) {
           hlsRef.current.destroy();
           hlsRef.current = null;
+      }
+      if (mpegtsRef.current) {
+          mpegtsRef.current.destroy();
+          mpegtsRef.current = null;
       }
       if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
       if (saveIntervalRef.current) clearInterval(saveIntervalRef.current);
