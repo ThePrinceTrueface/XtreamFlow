@@ -95,6 +95,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
   // Audio Tracks State
   const hlsRef = useRef<Hls | null>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [audioTracks, setAudioTracks] = useState<{id: number, name: string, lang: string}[]>([]);
   const [currentAudioTrack, setCurrentAudioTrack] = useState<number>(-1);
   const [showAudioMenu, setShowAudioMenu] = useState(false);
@@ -575,6 +576,13 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       onChannelSelect(playlist[newIdx]);
   };
 
+  const handleManualScroll = (direction: 'left' | 'right') => {
+    if (scrollContainerRef.current) {
+        const scrollAmount = direction === 'left' ? -400 : 400;
+        scrollContainerRef.current.scrollBy({ left: scrollAmount, behavior: 'smooth' });
+    }
+  };
+
   const formatTime = (time: number) => {
     if (isNaN(time)) return "00:00";
     const hours = Math.floor(time / 3600);
@@ -827,14 +835,33 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
             {/* Channels/VOD/Episodes List (Layer 2) */}
             {!isMini && activeMenu === 'channels' && playlist && (
-                <div className="flex overflow-x-auto gap-3 pb-6 custom-scrollbar mb-2 animate-in slide-in-from-bottom-4">
-                    {type === 'live' && (
-                        <div className="w-40 h-28 shrink-0 bg-[#1e2228] hover:bg-[#2a2f38] rounded-lg flex flex-col items-center justify-center cursor-pointer transition-colors border border-transparent shadow-lg">
-                            <ListVideo size={36} className="text-white/80 mb-2" />
-                            <span className="text-white/90 text-sm font-medium">TV guide</span>
-                        </div>
-                    )}
-                    {playlist.map((item, index) => {
+                <div className="relative group items-center mb-2 animate-in slide-in-from-bottom-4">
+                    {/* Scroll Buttons */}
+                    <button 
+                        onClick={() => handleManualScroll('left')}
+                        className="absolute left-0 top-1/2 -translate-y-1/2 z-50 bg-black/60 text-white p-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/90 -ml-4 shadow-xl border border-white/10"
+                    >
+                        <ChevronLeft size={24} />
+                    </button>
+                    
+                    <button 
+                        onClick={() => handleManualScroll('right')}
+                        className="absolute right-0 top-1/2 -translate-y-1/2 z-50 bg-black/60 text-white p-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/90 -mr-4 shadow-xl border border-white/10"
+                    >
+                        <ChevronRight size={24} />
+                    </button>
+
+                    <div 
+                        ref={scrollContainerRef}
+                        className="flex overflow-x-auto gap-3 pb-6 custom-scrollbar scroll-smooth"
+                    >
+                        {type === 'live' && (
+                            <div className="w-40 h-28 shrink-0 bg-[#1e2228] hover:bg-[#2a2f38] rounded-lg flex flex-col items-center justify-center cursor-pointer transition-colors border border-transparent shadow-lg">
+                                <ListVideo size={36} className="text-white/80 mb-2" />
+                                <span className="text-white/90 text-sm font-medium">TV guide</span>
+                            </div>
+                        )}
+                        {playlist.map((item, index) => {
                         let isActive = false;
                         let title = '';
                         let subtitle = '';
@@ -907,6 +934,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                             </div>
                         )
                     })}
+                    </div>
                 </div>
             )}
 
