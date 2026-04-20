@@ -12,6 +12,8 @@ interface GlobalSearchProps {
 
 export const GlobalSearch: React.FC<GlobalSearchProps> = ({ isOpen, onClose, onSelectResult }) => {
   const [query, setQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isDebouncing, setIsDebouncing] = useState(false);
   const [filter, setFilter] = useState<'all' | 'live' | 'epg' | 'movie' | 'series'>('all');
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -20,14 +22,31 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ isOpen, onClose, onS
       setTimeout(() => inputRef.current?.focus(), 100);
     } else {
       setQuery('');
+      setSearchQuery('');
       setFilter('all');
     }
   }, [isOpen]);
 
+  useEffect(() => {
+    if (query.length < 2) {
+      setSearchQuery('');
+      setIsDebouncing(false);
+      return;
+    }
+
+    setIsDebouncing(true);
+    const timer = setTimeout(() => {
+      setSearchQuery(query);
+      setIsDebouncing(false);
+    }, 3000);
+
+    return () => clearTimeout(timer);
+  }, [query]);
+
   const results = useLiveQuery(async () => {
-    if (query.length < 2) return { streams: [], epg: [], accountsMap: {} };
+    if (searchQuery.length < 2) return { streams: [], epg: [], accountsMap: {} };
     
-    const q = query.toLowerCase();
+    const q = searchQuery.toLowerCase();
     
     // Search streams (Live, VOD, Series)
     let streams = await db.streams
@@ -72,7 +91,7 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ isOpen, onClose, onS
     }, {} as Record<string, string>);
       
     return { streams, epg, accountsMap };
-  }, [query, filter], { streams: [], epg: [], accountsMap: {} });
+  }, [searchQuery, filter], { streams: [], epg: [], accountsMap: {} });
 
   const filters: { label: string, value: typeof filter }[] = [
     { label: 'Tous', value: 'all' },
@@ -132,6 +151,11 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ isOpen, onClose, onS
               {query.length < 2 ? (
                 <div className="py-12 text-center text-fluent-subtext">
                   Tapez au moins 2 caractères pour rechercher
+                </div>
+              ) : isDebouncing || query !== searchQuery ? (
+                <div className="py-12 flex flex-col items-center justify-center gap-4">
+                  <div className="w-10 h-10 border-4 border-fluent-accent/20 border-t-fluent-accent rounded-full animate-spin" />
+                  <div className="text-fluent-subtext text-sm">Recherche en cours...</div>
                 </div>
               ) : results.streams.length === 0 && results.epg.length === 0 ? (
                 <div className="py-12 text-center text-fluent-subtext">

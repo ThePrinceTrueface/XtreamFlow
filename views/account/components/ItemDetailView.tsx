@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ArrowLeft, Star, Play, Youtube, Download, Clock, Calendar, Film, User, Hash, AlignLeft, Flag, X, ChevronRight, ChevronLeft, Sparkles, LayoutGrid, Layers, Tv, CheckCircle2, RotateCcw } from 'lucide-react';
+import { ArrowLeft, Star, Play, Youtube, Download, Clock, Calendar, Film, User, Hash, AlignLeft, Flag, X, ChevronRight, ChevronLeft, Sparkles, LayoutGrid, Layers, Tv, CheckCircle2, RotateCcw, Link, Copy, Check } from 'lucide-react';
 import { Button } from '../../../components/Win11UI';
 import { XtreamStream, XtreamAccount } from '../../../types';
 import { useUserPreferences } from '../../../hooks/useUserPreferences';
@@ -33,6 +33,9 @@ export const ItemDetailView: React.FC<ItemDetailViewProps> = ({ item, detail, lo
     const { isFavorite, toggleFavorite, getProgress, clearProgress } = useUserPreferences(account.id);
     const favoriteId = item.stream_id || item.series_id;
     const isFav = isFavorite(favoriteId, type);
+
+    const [copied, setCopied] = useState(false);
+    const [copiedEpisodeId, setCopiedEpisodeId] = useState<string | number | null>(null);
     
     // Resume Logic
     const progressId = item.stream_id || item.series_id; // For movies, ID is stream_id
@@ -125,6 +128,44 @@ export const ItemDetailView: React.FC<ItemDetailViewProps> = ({ item, detail, lo
         const ext = episode.container_extension || 'mp4';
         // Force protocol for Xtream downloads
         return `${account.protocol || 'http'}://${account.host}:${account.port}/series/${account.username}/${account.password}/${episode.id}.${ext}`;
+    };
+
+    const getDirectLink = (itemToLink: any, itemType: string) => {
+        const proto = account.protocol || 'http';
+        const host = account.host;
+        const port = account.port;
+        const user = account.username;
+        const pass = account.password;
+        
+        if (itemType === 'live') {
+            const id = itemToLink.stream_id;
+            return `${proto}://${host}:${port}/live/${user}/${pass}/${id}.ts`;
+        } else if (itemType === 'vod') {
+            const id = itemToLink.stream_id;
+            const ext = detail?.movie_data?.container_extension || (itemToLink as any).container_extension || 'mp4';
+            return `${proto}://${host}:${port}/movie/${user}/${pass}/${id}.${ext}`;
+        } else if (itemType === 'series') {
+            const id = itemToLink.id || itemToLink.stream_id;
+            const ext = itemToLink.container_extension || 'mp4';
+            return `${proto}://${host}:${port}/series/${user}/${pass}/${id}.${ext}`;
+        }
+        return '';
+    };
+
+    const handleCopyLink = (targetItem: any, targetType: string, e?: React.MouseEvent) => {
+        if (e) e.stopPropagation();
+        const link = getDirectLink(targetItem, targetType);
+        if (!link) return;
+        
+        navigator.clipboard.writeText(link).then(() => {
+            if (targetType === 'episode') {
+                setCopiedEpisodeId(targetItem.id);
+                setTimeout(() => setCopiedEpisodeId(null), 2000);
+            } else {
+                setCopied(true);
+                setTimeout(() => setCopied(false), 2000);
+            }
+        });
     };
 
     const handleDownload = async () => {
@@ -392,6 +433,15 @@ export const ItemDetailView: React.FC<ItemDetailViewProps> = ({ item, detail, lo
                                         <Download size={20} className="text-green-400" /> Télécharger
                                     </Button>
                                 )}
+
+                                <Button 
+                                    variant="secondary" 
+                                    onClick={(e) => handleCopyLink(item, type, e)} 
+                                    className="!px-4 h-12 border-white/10 bg-white/5 hover:bg-white/10 text-white"
+                                    title="Copier le lien direct"
+                                >
+                                    {copied ? <Check size={20} className="text-green-400" /> : <Link size={20} />}
+                                </Button>
                             </div>
                         </div>
 
@@ -526,6 +576,15 @@ export const ItemDetailView: React.FC<ItemDetailViewProps> = ({ item, detail, lo
                                             <div className="w-10 h-10 rounded-full bg-fluent-accent text-black flex items-center justify-center opacity-0 group-hover:opacity-100 scale-75 group-hover:scale-100 transition-all shadow-lg" title="Lire">
                                                 <Play fill="currentColor" size={18} />
                                             </div>
+                                            
+                                            <button 
+                                                onClick={(e) => handleCopyLink(ep, 'series', e)}
+                                                className="w-10 h-10 rounded-full bg-white/10 text-white hover:bg-white/20 flex items-center justify-center opacity-0 group-hover:opacity-100 scale-75 group-hover:scale-100 transition-all shadow-lg border border-white/5"
+                                                title="Copier le lien direct"
+                                            >
+                                                {copiedEpisodeId === ep.id ? <Check size={18} className="text-green-400" /> : <Link size={18} />}
+                                            </button>
+
                                             <button 
                                                 onClick={(e) => handleDownloadEpisode(e, ep)}
                                                 className="w-10 h-10 rounded-full bg-white/10 text-white hover:bg-white/20 flex items-center justify-center opacity-0 group-hover:opacity-100 scale-75 group-hover:scale-100 transition-all shadow-lg border border-white/5"
