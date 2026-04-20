@@ -261,13 +261,22 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
+    
+    // Enable CORS for proxied streams
+    video.crossOrigin = "anonymous";
 
     setIsLoading(true);
     setIsRetrying(false);
 
-    const finalUrl = url;
-    const isHls = finalUrl.includes('.m3u8') || url.includes('.m3u8') || type === 'live';
-    const isMpegTs = (finalUrl.toLowerCase().includes('.ts') || finalUrl.toLowerCase().includes('.m2ts')) && !isHls;
+    const isM3U8 = url.toLowerCase().includes('.m3u8');
+    const isTS = url.toLowerCase().includes('.ts') || url.toLowerCase().includes('.m2ts');
+    
+    // In Xtream, if it doesn't have .m3u8, it's likely MPEG-TS even for live
+    const isHls = isM3U8 || (type === 'live' && !isTS);
+    const isMpegTs = isTS && !isM3U8;
+
+    // Apply proxy only for remote non-blob URLs
+    const finalUrl = (!url.startsWith('blob:') && !url.startsWith('data:')) ? createProxyUrl(url) : url;
     
     // Reset audio and subtitle tracks on new video
     setAudioTracks([]);
@@ -349,6 +358,13 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         levelLoadingMaxRetry: 3,
         fragLoadingTimeOut: 20000,
         fragLoadingMaxRetry: 3,
+        xhrSetup: (xhr, url) => {
+            // Apply proxy to segments if they are not already proxied
+            // This is crucial for CORS-unfriendly IPTV servers
+            if (url.startsWith('http') && !url.includes('proxygo') && !url.includes('google.com')) {
+                xhr.open('GET', createProxyUrl(url), true);
+            }
+        }
       });
 
       const hls = hlsRef.current;
@@ -480,9 +496,9 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       video.onerror = () => {
           const err = video.error;
           let msg = "Erreur de lecture.";
-          if (err?.code === 4) msg = "Format de source non supporté par le navigateur.";
+          if (err?.code === 4) msg = "Format non supporté ou erreur CORS.";
           else if (err?.code === 3) msg = "Erreur de décodage.";
-          else if (err?.code === 2) msg = "Erreur réseau.";
+          else if (err?.code === 2) msg = "Erreur réseau (vérifiez votre connexion).";
           
           console.error("Native Video Error", err);
           setError(msg);
