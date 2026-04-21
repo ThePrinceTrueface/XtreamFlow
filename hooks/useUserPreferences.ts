@@ -1,5 +1,5 @@
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { GlobalPreferences, StreamProgress, XtreamStream, AccountPreferences } from '../types';
 
 const STORAGE_KEY = 'xtream_user_prefs';
@@ -44,23 +44,44 @@ export const useUserPreferences = (accountId: string) => {
     return prefs[accountId]?.favoritesTable?.[type] || [];
   }, [prefs, accountId]);
 
+  // Memoize sets of favorite IDs for O(1) lookups during render
+  const favoriteIds = useMemo(() => {
+     const table = prefs[accountId]?.favoritesTable;
+     const sets = {
+         live: new Set<string>(),
+         vod: new Set<string>(),
+         series: new Set<string>(),
+         all: new Set<string>()
+     };
+     if (!table) return sets;
+
+     const addIds = (arr: XtreamStream[] | undefined, set: Set<string>) => {
+         if (!arr) return;
+         for (const item of arr) {
+             const id = (item.stream_id || item.series_id || "").toString();
+             if (id) {
+                 set.add(id);
+                 sets.all.add(id);
+             }
+         }
+     }
+
+     addIds(table.live, sets.live);
+     addIds(table.vod, sets.vod);
+     addIds(table.series, sets.series);
+
+     return sets;
+  }, [prefs, accountId]);
+
   const isFavorite = useCallback((itemId: string | number | undefined, type?: 'live' | 'vod' | 'series'): boolean => {
     if (!itemId) return false;
     const idStr = itemId.toString();
-    const table = prefs[accountId]?.favoritesTable;
-    if (!table) return false;
-
+    
     if (type) {
-        return table[type]?.some(item => (item.stream_id || item.series_id || "").toString() === idStr) || false;
+        return favoriteIds[type].has(idStr);
     }
-
-    return (
-        table.live?.some(item => (item.stream_id || "").toString() === idStr) ||
-        table.vod?.some(item => (item.stream_id || "").toString() === idStr) ||
-        table.series?.some(item => (item.series_id || "").toString() === idStr) ||
-        false
-    );
-  }, [prefs, accountId]);
+    return favoriteIds.all.has(idStr);
+  }, [favoriteIds]);
 
   const toggleFavorite = useCallback((item: XtreamStream, type: 'live' | 'vod' | 'series') => {
     const itemId = item.stream_id || item.series_id;

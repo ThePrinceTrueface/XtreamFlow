@@ -17,10 +17,28 @@ interface ItemGridProps {
 export const ItemGrid: React.FC<ItemGridProps> = ({ items, type, onItemClick, accountId = 'guest' }) => {
   const [displayLimit, setDisplayLimit] = useState(60);
   const { getProgress, isFavorite } = useUserPreferences(accountId);
+  const observerTarget = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setDisplayLimit(60);
   }, [items]);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      entries => {
+        if (entries[0].isIntersecting) {
+          setDisplayLimit(prev => Math.min(prev + 60, items.length));
+        }
+      },
+      { rootMargin: '400px' } 
+    );
+    
+    if (observerTarget.current) {
+      observer.observe(observerTarget.current);
+    }
+    
+    return () => observer.disconnect();
+  }, [items.length]);
 
   const visibleItems = items.slice(0, displayLimit);
   const hasMore = items.length > displayLimit;
@@ -51,7 +69,6 @@ export const ItemGrid: React.FC<ItemGridProps> = ({ items, type, onItemClick, ac
             <motion.div 
               key={id} 
               onClick={() => onItemClick(item)}
-              layoutId={`item-container-${id}`}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               whileHover={{ y: -5 }}
@@ -62,7 +79,6 @@ export const ItemGrid: React.FC<ItemGridProps> = ({ items, type, onItemClick, ac
               <div className={`${type === 'live' ? 'aspect-square' : 'aspect-[2/3]'} w-full bg-black/40 relative flex items-center justify-center overflow-hidden`}>
                 {item.stream_icon || item.cover ? (
                   <motion.img 
-                    layoutId={`poster-${id}`}
                     src={item.stream_icon || item.cover} 
                     className="w-full h-full object-contain p-2 transition-transform duration-500 group-hover:scale-105" 
                     loading="lazy" 
@@ -95,7 +111,6 @@ export const ItemGrid: React.FC<ItemGridProps> = ({ items, type, onItemClick, ac
 
               <div className="p-3 border-t border-white/5">
                 <motion.h4 
-                  layoutId={`title-${id}`}
                   className="text-[13px] font-medium truncate mb-1 text-white group-hover:text-fluent-accent transition-colors" 
                   title={decodeBase64(item.name)}
                 >
@@ -114,10 +129,11 @@ export const ItemGrid: React.FC<ItemGridProps> = ({ items, type, onItemClick, ac
       </div>
       
       {hasMore && (
-        <div className="flex justify-center pt-6">
-          <Button variant="secondary" onClick={() => setDisplayLimit(prev => prev + 60)} className="!px-8 h-10 border-white/10 hover:bg-white/5">
-            <PlusCircle size={16} /> Afficher plus ({items.length - displayLimit} restants)
-          </Button>
+        <div ref={observerTarget} className="flex justify-center pt-6 h-10 w-full">
+           <div className="flex items-center gap-2 text-white/50 animate-pulse text-sm">
+              <PlusCircle size={16} className="animate-spin" /> 
+              Chargement...
+           </div>
         </div>
       )}
     </div>
