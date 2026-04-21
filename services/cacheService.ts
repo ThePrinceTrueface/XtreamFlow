@@ -221,6 +221,40 @@ export class CacheService {
     }
   }
 
+  async updateCatalogue(account: XtreamAccount, options: { live?: boolean, vod?: boolean, series?: boolean, epg?: boolean }, onProgress?: (step: string, percent: number) => void) {
+    try {
+      const stepsToRun = [];
+      if (options.live) stepsToRun.push('live');
+      if (options.vod) stepsToRun.push('vod');
+      if (options.series) stepsToRun.push('series');
+
+      const totalSteps = stepsToRun.length;
+      if (totalSteps === 0 && !options.epg) return;
+
+      for (let i = 0; i < totalSteps; i++) {
+        const type = stepsToRun[i] as 'live' | 'vod' | 'series';
+        const basePercent = (i / totalSteps) * 100;
+        
+        if (onProgress) onProgress(`Updating ${type} categories...`, basePercent + 5);
+        await this.getCategories(account, type, true);
+        
+        if (onProgress) onProgress(`Updating ${type} streams...`, basePercent + 20);
+        await this.getStreams(account, type, undefined, true);
+      }
+
+      if (options.epg) {
+        if (onProgress) onProgress(`Clearing local EPG cache...`, 95);
+        await db.epg.where('accountId').equals(account.id).delete();
+      }
+
+      if (onProgress) onProgress('Mise à jour terminée avec succès', 100);
+    } catch (error) {
+      console.error('Error updating catalogue:', error);
+      if (onProgress) onProgress('Erreur lors de la mise à jour', 100);
+      throw error;
+    }
+  }
+
   async prefetchCatalogue(account: XtreamAccount, onProgress?: (step: string, percent: number) => void) {
     try {
       const steps = ['live', 'vod', 'series'];

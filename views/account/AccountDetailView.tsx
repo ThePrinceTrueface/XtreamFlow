@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { RefreshCw, AlertCircle, Activity, Calendar, Users, Server, Info as InfoIcon, Play, Wrench, CheckCircle2, Film, Tv, Clapperboard, BarChart3, X, Wifi, Gauge, ArrowDown, Download, ShieldCheck, Database, LayoutGrid } from 'lucide-react';
+import { RefreshCw, AlertCircle, Activity, Calendar, Users, Server, Info as InfoIcon, Play, Wrench, CheckCircle2, Film, Tv, Clapperboard, BarChart3, X, Wifi, Gauge, ArrowDown, Download, ShieldCheck, Database, LayoutGrid, Trash2 } from 'lucide-react';
 import { XtreamAccount, XtreamAuthResponse } from '../../types';
 import { Card, Button, Modal } from '../../components/Win11UI';
 import { calculateDaysRemaining, formatDate, createProxyUrl } from '../../utils';
@@ -48,6 +48,17 @@ export const AccountDetailView: React.FC<{ onBack: () => void; onPlayDownload?: 
   const [activeTab, setActiveTab] = useState(tabFromUrl);
   const [visitedTabs, setVisitedTabs] = useState<Set<string>>(new Set([tabFromUrl]));
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  
+  // -- PRELOAD STATE --
+  const [showPreloadPrompt, setShowPreloadPrompt] = useState(false);
+  const [isPreloading, setIsPreloading] = useState(false);
+  const [preloadProgressData, setPreloadProgressData] = useState({ step: '', percent: 0 });
+
+  // -- UPDATE STATE --
+  const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
+  const [updateOptions, setUpdateOptions] = useState({ live: true, vod: true, series: true, epg: false });
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [updateProgressData, setUpdateProgressData] = useState({ step: '', percent: 0 });
   
   useEffect(() => {
     setActiveTab(tabFromUrl);
@@ -120,7 +131,67 @@ export const AccountDetailView: React.FC<{ onBack: () => void; onPlayDownload?: 
     // Clear cache when switching accounts to avoid mixing data
     globalCache.current.clear();
     fetchAccountInfo();
-  }, [account]);
+
+    if (account && !account.preloadPreference) {
+      setShowPreloadPrompt(true);
+    }
+  }, [account?.id]);
+
+  const handlePreloadChoice = async (choice: 'full' | 'dynamic') => {
+    if (!account) return;
+    
+    // Save preference to suppress popup in future
+    await db.accounts.update(account.id, { preloadPreference: choice });
+    
+    if (choice === 'dynamic') {
+      setShowPreloadPrompt(false);
+    } else {
+      setShowPreloadPrompt(false);
+      setIsPreloading(true);
+      try {
+        await cacheService.prefetchCatalogue(account, (step, percent) => {
+          setPreloadProgressData({ step, percent });
+        });
+        alert('Toutes les catégories et listes de flux ont été mises en cache avec succès pour une navigation hors-ligne !');
+      } catch (err) {
+        console.error("Erreur de préchargement:", err);
+        alert('Une erreur est survenue lors du préchargement. Certaines données pourraient manquer.');
+      } finally {
+        setIsPreloading(false);
+      }
+    }
+  };
+
+  const handleClearLocalCache = async () => {
+    if (!account) return;
+    if (window.confirm("Voulez-vous vraiment supprimer toutes les données de cette playlist du cache local (catégories, flux, EPG) ? Cela forcera l'application à les re-télécharger.")) {
+      try {
+        await db.clearAccountData(account.id);
+        // Reset preload preference so the prompt shows up again if desired
+        await db.accounts.update(account.id, { preloadPreference: undefined });
+        alert("Cache vidé avec succès !");
+      } catch (err) {
+        console.error("Erreur vidage cache:", err);
+      }
+    }
+  };
+
+  const handleUpdatePlaylist = async () => {
+      if (!account) return;
+      setIsUpdateModalOpen(false);
+      setIsUpdating(true);
+      try {
+          await cacheService.updateCatalogue(account, updateOptions, (step, percent) => {
+              setUpdateProgressData({ step, percent });
+          });
+          alert('Mise à jour complète et réussie !');
+      } catch (err) {
+          console.error("Erreur de mise à jour:", err);
+          alert('Erreur lors de la mise à jour de la playlist.');
+      } finally {
+          setIsUpdating(false);
+      }
+  };
 
   const buildApiUrl = (action: string) => {
     if (!account) return '';
@@ -519,6 +590,40 @@ export const AccountDetailView: React.FC<{ onBack: () => void; onPlayDownload?: 
                       <Wifi size={16} /> Start Speed Test
                   </Button>
               </Card>
+
+              <Card className="hover:bg-fluent-layerHover transition-colors border-l-4 border-l-blue-400">
+                  <div className="flex items-start gap-4 mb-4">
+                      <div className="p-3 bg-blue-500/10 rounded-lg text-blue-400">
+                          <RefreshCw size={24} />
+                      </div>
+                      <div>
+                          <h3 className="text-lg font-medium">Mettre à jour</h3>
+                          <p className="text-sm text-fluent-subtext mt-1">
+                              Téléchargez les derniers changements de la playlist (Nouveaux films, épisodes, modifications VOD/TV).
+                          </p>
+                      </div>
+                  </div>
+                  <Button onClick={() => setIsUpdateModalOpen(true)} className="w-full mt-2 bg-blue-500 text-white hover:bg-blue-600 border-none">
+                      <RefreshCw size={16} /> Update Playlist
+                  </Button>
+              </Card>
+
+              <Card className="hover:bg-fluent-layerHover transition-colors border-l-4 border-l-red-500">
+                  <div className="flex items-start gap-4 mb-4">
+                      <div className="p-3 bg-red-500/10 rounded-lg text-red-500">
+                          <Database size={24} />
+                      </div>
+                      <div>
+                          <h3 className="text-lg font-medium">Vider le Cache</h3>
+                          <p className="text-sm text-fluent-subtext mt-1">
+                              Supprime toutes les catégories, les listes de chaînes/VOD et l'EPG téléchargés en local pour forcer une réactualisation.
+                          </p>
+                      </div>
+                  </div>
+                  <Button onClick={handleClearLocalCache} variant="secondary" className="w-full mt-2 hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/40">
+                      <Trash2 size={16} /> Vider le Cache
+                  </Button>
+              </Card>
           </div>
       </div>
   );
@@ -838,6 +943,143 @@ export const AccountDetailView: React.FC<{ onBack: () => void; onPlayDownload?: 
                  </div>
              </div>
          )}
+         
+         {/* PRELOAD PROMPT MODAL */}
+         {showPreloadPrompt && (
+             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md animate-in fade-in">
+                 <div className="bg-[#1c1c1c] border border-fluent-border rounded-xl shadow-2xl w-full max-w-2xl p-8 relative animate-in zoom-in-95 overflow-hidden">
+                     <div className="text-center p-4">
+                         <div className="mx-auto w-16 h-16 bg-blue-500/20 text-blue-400 rounded-full flex items-center justify-center mb-6">
+                             <Database size={32} />
+                         </div>
+                         <h2 className="text-2xl font-bold mb-4">Préchargement de la Playlist</h2>
+                         <p className="text-fluent-subtext mb-8 max-w-lg mx-auto">
+                             Voulez-vous télécharger toutes les catégories et listes de chaînes/films pour une navigation instantanée (sans chargements) et une utilisation hors-ligne, ou préférez-vous charger les éléments dynamiquement (économise les données et la mémoire) ?
+                         </p>
+            
+                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                             <button 
+                                onClick={() => handlePreloadChoice('full')}
+                                className="flex flex-col items-center p-6 border border-white/10 rounded-xl hover:border-blue-500 hover:bg-blue-500/10 transition-all group"
+                             >
+                                 <Database className="text-blue-400 mb-3 group-hover:scale-110 transition-transform" size={32} />
+                                 <h3 className="font-semibold text-lg mb-2">Préchargement Complet</h3>
+                                 <p className="text-sm text-fluent-subtext text-center">Télécharge le catalogue pour une fluidité maximale et la recherche globale.</p>
+                             </button>
+            
+                             <button 
+                                onClick={() => handlePreloadChoice('dynamic')}
+                                className="flex flex-col items-center p-6 border border-white/10 rounded-xl hover:border-green-500 hover:bg-green-500/10 transition-all group"
+                             >
+                                 <Wifi className="text-green-400 mb-3 group-hover:scale-110 transition-transform" size={32} />
+                                 <h3 className="font-semibold text-lg mb-2">Navigation Dynamique</h3>
+                                 <p className="text-sm text-fluent-subtext text-center">Charge à la volée. Idéal pour les appareils limités ou pour économiser de la data.</p>
+                             </button>
+                         </div>
+                     </div>
+                 </div>
+             </div>
+         )}
+    
+         {/* PRELOADING PROGRESS MODAL */}
+         {isPreloading && (
+             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md animate-in fade-in">
+                 <div className="bg-[#1c1c1c] border border-fluent-border rounded-xl shadow-2xl w-full max-w-lg p-8 relative animate-in zoom-in-95 overflow-hidden">
+                      <div className="p-4 text-center">
+                           <h3 className="text-xl font-semibold mb-2">Préchargement en cours...</h3>
+                           <p className="text-fluent-subtext text-sm mb-6">Le catalogue (Live, VOD, Séries) est en cours d'enregistrement dans votre navigateur.</p>
+                           
+                           <div className="w-full bg-white/10 h-3 rounded-full overflow-hidden mb-3 shadow-[inset_0_1px_3px_rgba(0,0,0,0.4)]">
+                               <div 
+                                   className="h-full bg-gradient-to-r from-blue-500 to-purple-500 transition-all duration-300 relative"
+                                   style={{ width: `${Math.max(5, preloadProgressData.percent)}%` }}
+                               >
+                                    <div className="absolute inset-0 bg-[linear-gradient(45deg,transparent_25%,rgba(255,255,255,0.2)_50%,transparent_75%)] bg-[length:20px_20px] animate-[pulse_2s_linear_infinite]" />
+                               </div>
+                           </div>
+                           
+                           <div className="flex justify-between items-center text-xs">
+                               <span className="text-fluent-accent font-medium">{preloadProgressData.step}</span>
+                               <span className="font-bold text-white max-w-[50%] truncate text-right">
+                                    {Math.round(preloadProgressData.percent)}%
+                               </span>
+                           </div>
+                      </div>
+                 </div>
+             </div>
+         )}
+         {/* UPDATE PROGRESS MODAL */}
+         {isUpdating && (
+             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md animate-in fade-in">
+                 <div className="bg-[#1c1c1c] border border-fluent-border rounded-xl shadow-2xl w-full max-w-lg p-8 relative animate-in zoom-in-95 overflow-hidden">
+                      <div className="p-4 text-center">
+                           <h3 className="text-xl font-semibold mb-2">Mise à jour en cours...</h3>
+                           <p className="text-fluent-subtext text-sm mb-6">L'application télécharge les dernières nouveautés de votre playlist.</p>
+                           
+                           <div className="w-full bg-white/10 h-3 rounded-full overflow-hidden mb-3 shadow-[inset_0_1px_3px_rgba(0,0,0,0.4)]">
+                               <div 
+                                   className="h-full bg-blue-400 transition-all duration-300 relative"
+                                   style={{ width: `${Math.max(5, updateProgressData.percent)}%` }}
+                               >
+                                    <div className="absolute inset-0 bg-[linear-gradient(45deg,transparent_25%,rgba(255,255,255,0.2)_50%,transparent_75%)] bg-[length:20px_20px] animate-[pulse_2s_linear_infinite]" />
+                               </div>
+                           </div>
+                           
+                           <div className="flex justify-between items-center text-xs">
+                               <span className="text-blue-300 font-medium">{updateProgressData.step}</span>
+                               <span className="font-bold text-white max-w-[50%] truncate text-right">
+                                    {Math.round(updateProgressData.percent)}%
+                               </span>
+                           </div>
+                      </div>
+                 </div>
+             </div>
+         )}
+         
+         {/* UPDATE OPTIONS MODAL */}
+         <Modal isOpen={isUpdateModalOpen} onCancel={() => setIsUpdateModalOpen(false)} title="Options de mise à jour" type="info">
+              <div className="space-y-4 pt-2 pb-4">
+                  <p className="text-sm text-fluent-subtext mb-4">Sélectionnez les contenus que vous souhaitez actualiser avec les serveurs distants.</p>
+                  
+                  <label className="flex items-center gap-3 p-3 bg-white/5 rounded-lg border border-white/10 hover:bg-white/10 cursor-pointer">
+                      <input type="checkbox" checked={updateOptions.live} onChange={(e) => setUpdateOptions({...updateOptions, live: e.target.checked})} className="w-5 h-5 accent-fluent-accent" />
+                      <div className="flex flex-col">
+                          <span className="font-medium">Chaines TV (Live)</span>
+                          <span className="text-xs text-fluent-subtext">Actualise la liste des chaines et catégories directes.</span>
+                      </div>
+                  </label>
+                  
+                  <label className="flex items-center gap-3 p-3 bg-white/5 rounded-lg border border-white/10 hover:bg-white/10 cursor-pointer">
+                      <input type="checkbox" checked={updateOptions.vod} onChange={(e) => setUpdateOptions({...updateOptions, vod: e.target.checked})} className="w-5 h-5 accent-fluent-accent" />
+                      <div className="flex flex-col">
+                          <span className="font-medium">Films (VOD)</span>
+                          <span className="text-xs text-fluent-subtext">Télécharge les nouveautés films du catalogue.</span>
+                      </div>
+                  </label>
+                  
+                  <label className="flex items-center gap-3 p-3 bg-white/5 rounded-lg border border-white/10 hover:bg-white/10 cursor-pointer">
+                      <input type="checkbox" checked={updateOptions.series} onChange={(e) => setUpdateOptions({...updateOptions, series: e.target.checked})} className="w-5 h-5 accent-fluent-accent" />
+                      <div className="flex flex-col">
+                          <span className="font-medium">Séries</span>
+                          <span className="text-xs text-fluent-subtext">Met à jour les séries et les nouveaux épisodes.</span>
+                      </div>
+                  </label>
+
+                  <label className="flex items-center gap-3 p-3 bg-white/5 rounded-lg border border-white/10 hover:bg-white/10 cursor-pointer">
+                      <input type="checkbox" checked={updateOptions.epg} onChange={(e) => setUpdateOptions({...updateOptions, epg: e.target.checked})} className="w-5 h-5 accent-fluent-accent" />
+                      <div className="flex flex-col">
+                          <span className="font-medium">Guide EPG (Cache local)</span>
+                          <span className="text-xs text-fluent-subtext">Vide les programmes conservés permettant le re-téléchargement instantané.</span>
+                      </div>
+                  </label>
+                  
+                  <div className="flex justify-end gap-3 mt-4 pt-4 border-t border-white/10">
+                      <Button variant="secondary" onClick={() => setIsUpdateModalOpen(false)}>Annuler</Button>
+                      <Button onClick={handleUpdatePlaylist} disabled={!updateOptions.live && !updateOptions.vod && !updateOptions.series && !updateOptions.epg}>Démarrer la mise à jour</Button>
+                  </div>
+              </div>
+         </Modal>
+
       </div>
     </div>
   );

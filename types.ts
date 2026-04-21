@@ -13,6 +13,7 @@ export interface XtreamAccount {
   protocol: 'http' | 'https';
   isFavorite?: boolean;
   tags?: string[];
+  preloadPreference?: 'full' | 'dynamic';
 }
 
 export interface SavedServer {
