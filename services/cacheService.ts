@@ -89,7 +89,7 @@ export class CacheService {
         if (categoryId) {
            // We filter in memory to bypass string/number strictness issues
            const filtered = allCachedForType.filter(s => String(s.category_id) === String(categoryId));
-           if (filtered.length > 0) return filtered;
+           return filtered;
         } else {
            return allCachedForType;
         }
@@ -212,7 +212,16 @@ export class CacheService {
     return [];
   }
 
-  async getStreamInfo(account: XtreamAccount, type: 'vod' | 'series', id: string | number): Promise<any> {
+  async getStreamInfo(account: XtreamAccount, type: 'vod' | 'series', id: string | number, forceRefresh = false): Promise<any> {
+    const dbId = `${account.id}_${type}_${id}`;
+    
+    if (!forceRefresh) {
+      const cached = await db.streamDetails.get(dbId);
+      if (cached && cached.data) {
+        return cached.data;
+      }
+    }
+
     const action = type === 'vod' ? 'get_vod_info' : 'get_series_info';
     const paramKey = type === 'vod' ? 'vod_id' : 'series_id';
     const url = this.buildApiUrl(account, action, { [paramKey]: id.toString() });
@@ -220,9 +229,23 @@ export class CacheService {
     try {
       const response = await fetch(url);
       if (!response.ok) throw new Error(`Failed to fetch stream info: ${response.statusText}`);
-      return await response.json();
+      const data = await response.json();
+      
+      // Save to cache
+      await db.streamDetails.put({
+        dbId,
+        accountId: account.id,
+        type,
+        streamId: id.toString(),
+        data,
+        timestamp: Date.now()
+      });
+      
+      return data;
     } catch (error) {
       console.error('Error fetching stream info:', error);
+      const cached = await db.streamDetails.get(dbId);
+      if (cached && cached.data) return cached.data;
       throw error;
     }
   }

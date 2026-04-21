@@ -30,17 +30,19 @@ export class AppDatabase extends Dexie {
   epg!: Table<CachedEPG>;
   history!: Table<CachedHistory>;
   downloads!: Table<DownloadItem>;
+  streamDetails!: Table<any>;
 
   constructor() {
     super('XtreamFlowDB');
-    this.version(2).stores({
+    this.version(3).stores({
       accounts: 'id, name, addedAt',
       servers: 'id, alias, host',
       streams: '++id, accountId, type, category_id, stream_id, series_id, [accountId+type], [accountId+type+category_id]',
       categories: '++id, accountId, type, category_id, [accountId+type]',
       epg: '++id, accountId, channel_id, start_timestamp, stop_timestamp, [accountId+channel_id]',
       history: 'dbId, accountId, lastWatched',
-      downloads: 'id, accountId, status, addedAt'
+      downloads: 'id, accountId, status, addedAt',
+      streamDetails: 'dbId, accountId, type, streamId'
     });
   }
 
