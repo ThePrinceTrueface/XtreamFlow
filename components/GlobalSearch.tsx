@@ -38,7 +38,7 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ isOpen, onClose, onS
     const timer = setTimeout(() => {
       setSearchQuery(query);
       setIsDebouncing(false);
-    }, 3000);
+    }, 400);
 
     return () => clearTimeout(timer);
   }, [query]);

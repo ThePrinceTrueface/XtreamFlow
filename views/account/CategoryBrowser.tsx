@@ -7,6 +7,7 @@ import { XtreamAccount, XtreamCategory, XtreamStream } from '../../types';
 import { Button } from '../../components/Win11UI';
 import { VideoPlayer } from '../../components/VideoPlayer';
 import { createProxyUrl, createInlineWorker } from '../../utils';
+import { db } from '../../db';
 import { XTREAM_WORKER_CODE } from '../../workers/xtream.worker';
 import { useUserPreferences } from '../../hooks/useUserPreferences';
 import { cacheService } from '../../services/cacheService';
@@ -129,9 +130,9 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
   useEffect(() => {
       try {
           workerRef.current = createInlineWorker(XTREAM_WORKER_CODE);
-          workerRef.current.onmessage = (e) => {
-              const { type, data, error } = e.data;
-              if (type === 'SUCCESS') {
+          workerRef.current.onmessage = async (e) => {
+              const { type: workerMsgType, data, error } = e.data;
+              if (workerMsgType === 'SUCCESS') {
                   setFullData(data.full);
                   setCategoryPreviews(data.grouped);
                   setHeroIndex(data.full.length > 0 ? Math.floor(Math.random() * Math.min(data.full.length, 100)) : -1);
@@ -139,13 +140,33 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
                   // In Flow mode, displayData is the full set
                   if (uiMode === 'flow') {
                       setDisplayData(data.full);
+                      
+                      // Push to DB so GlobalSearch can find it
+                      if (account?.id && type) {
+                          const dbType = type === 'live' ? 'live' : type === 'vod' ? 'movie' : 'series';
+                          try {
+                              const existingCount = await db.streams.where('[accountId+type]').equals([account.id, dbType]).count();
+                              if (existingCount < data.full.length) {
+                                  // we use bulkPut to silently overwrite if ID conflicts
+                                  const toCache = data.full.map((stream: any) => ({
+                                      ...stream,
+                                      accountId: account.id,
+                                      type: dbType
+                                  }));
+                                  await db.streams.where('[accountId+type]').equals([account.id, dbType]).delete();
+                                  await db.streams.bulkAdd(toCache);
+                              }
+                          } catch(err) {
+                              console.error("Failed caching streams for global search", err);
+                          }
+                      }
                   }
                   
                   setLoading(false);
-              } else if (type === 'ERROR') {
+              } else if (workerMsgType === 'ERROR') {
                   console.error("Worker Error:", error);
                   setLoading(false);
-              } else if (type === 'FILTER_RESULT') {
+              } else if (workerMsgType === 'FILTER_RESULT') {
                   setDisplayData(data);
               }
           };
@@ -153,7 +174,7 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
           console.error("Worker Init Failed", e);
       }
       return () => workerRef.current?.terminate();
-  }, []);
+  }, [account?.id, type, uiMode]);
 
   // Sync ref with state
   useEffect(() => { heroDetailRef.current = heroDetail; }, [heroDetail]);

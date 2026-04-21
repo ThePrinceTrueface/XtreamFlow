@@ -5,7 +5,7 @@ import {
   SkipBack, SkipForward, Settings, List, ListVideo, ChevronLeft, ChevronRight, Square,
   Expand, Shrink, RefreshCw, Clock, Info, Columns, AudioLines, Captions,
   ChevronUp, ChevronDown, Search, MonitorPlay, Tv, PictureInPicture,
-  RotateCcw, RotateCw, Film
+  RotateCcw, RotateCw, Film, Link, Check
 } from 'lucide-react';
 import Hls from 'hls.js';
 import mpegts from 'mpegts.js';
@@ -275,8 +275,8 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     const isHls = isM3U8 || (type === 'live' && !isTS);
     const isMpegTs = isTS && !isM3U8;
 
-    // Apply proxy only for remote non-blob URLs
-    const finalUrl = (!url.startsWith('blob:') && !url.startsWith('data:')) ? createProxyUrl(url) : url;
+    // Do not use proxy for direct stream URLs as per user request (Xtream servers may block proxy IP)
+    const finalUrl = url;
     
     // Reset audio and subtitle tracks on new video
     setAudioTracks([]);
@@ -357,14 +357,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         levelLoadingTimeOut: 10000,
         levelLoadingMaxRetry: 3,
         fragLoadingTimeOut: 20000,
-        fragLoadingMaxRetry: 3,
-        xhrSetup: (xhr, url) => {
-            // Apply proxy to segments if they are not already proxied
-            // This is crucial for CORS-unfriendly IPTV servers
-            if (url.startsWith('http') && !url.includes('proxygo') && !url.includes('google.com')) {
-                xhr.open('GET', createProxyUrl(url), true);
-            }
-        }
+        fragLoadingMaxRetry: 3
       });
 
       const hls = hlsRef.current;
@@ -1087,6 +1080,26 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                     <button className="flex flex-col items-center gap-1.5 transition-colors text-white/70 hover:text-white">
                         <PictureInPicture size={24} />
                         <span className="text-[10px] font-medium">PiP</span>
+                    </button>
+                    
+                    <button 
+                        onClick={async () => {
+                            try {
+                                await navigator.clipboard.writeText(url);
+                                const span = document.getElementById('copy-url-text');
+                                if (span) {
+                                    span.innerText = "Copié !";
+                                    setTimeout(() => { span.innerText = "Copier URL" }, 2000);
+                                }
+                            } catch (e) {
+                                console.error("Failed to copy URL", e);
+                            }
+                        }} 
+                        className="flex flex-col items-center gap-1.5 transition-colors text-white/70 hover:text-white"
+                        title="Copier le lien source du flux"
+                    >
+                        <Link size={24} />
+                        <span id="copy-url-text" className="text-[10px] font-medium">Copier URL</span>
                     </button>
                     
                     <div className="relative flex flex-col items-center">
