@@ -27,10 +27,12 @@ export class CacheService {
   }
 
   async getCategories(account: XtreamAccount, type: 'live' | 'vod' | 'series', forceRefresh = false): Promise<XtreamCategory[]> {
+    const mappedType = type === 'vod' ? 'movie' : type;
+
     if (!forceRefresh) {
       const cached = await db.categories
         .where('[accountId+type]')
-        .equals([account.id, type])
+        .equals([account.id, mappedType])
         .toArray();
       
       if (cached.length > 0) {
@@ -50,13 +52,13 @@ export class CacheService {
         // Clear old categories for this type
         await db.categories
           .where('[accountId+type]')
-          .equals([account.id, type])
+          .equals([account.id, mappedType])
           .delete();
 
         const toCache = data.map(cat => ({
           ...cat,
           accountId: account.id,
-          type
+          type: mappedType
         }));
         
         await db.categories.bulkAdd(toCache);
@@ -67,7 +69,7 @@ export class CacheService {
       // Fallback to cache if fetch fails even on forceRefresh
       const cached = await db.categories
         .where('[accountId+type]')
-        .equals([account.id, type])
+        .equals([account.id, mappedType])
         .toArray();
       if (cached.length > 0) return cached;
       throw error;
@@ -77,17 +79,20 @@ export class CacheService {
   }
 
   async getStreams(account: XtreamAccount, type: 'live' | 'vod' | 'series', categoryId?: string, forceRefresh = false): Promise<XtreamStream[]> {
+    const mappedType = type === 'vod' ? 'movie' : type;
+
     if (!forceRefresh) {
-      let query;
-      if (categoryId) {
-        query = db.streams.where('[accountId+type+category_id]').equals([account.id, type, categoryId]);
-      } else {
-        query = db.streams.where('[accountId+type]').equals([account.id, type]);
-      }
+      // Always fetch all by type first as a fast fallback to avoid type-strict IndexDB misses
+      const allCachedForType = await db.streams.where('[accountId+type]').equals([account.id, mappedType]).toArray();
       
-      const cached = await query.toArray();
-      if (cached.length > 0) {
-        return cached;
+      if (allCachedForType.length > 0) {
+        if (categoryId) {
+           // We filter in memory to bypass string/number strictness issues
+           const filtered = allCachedForType.filter(s => String(s.category_id) === String(categoryId));
+           if (filtered.length > 0) return filtered;
+        } else {
+           return allCachedForType;
+        }
       }
     }
 
@@ -106,20 +111,20 @@ export class CacheService {
         if (categoryId) {
           await db.streams
             .where('[accountId+type+category_id]')
-            .equals([account.id, type, categoryId])
+            .equals([account.id, mappedType, categoryId])
             .delete();
         } else {
           // If we fetched all, clear all for this type
           await db.streams
             .where('[accountId+type]')
-            .equals([account.id, type])
+            .equals([account.id, mappedType])
             .delete();
         }
 
         const toCache = data.map(stream => ({
           ...stream,
           accountId: account.id,
-          type: type === 'live' ? 'live' : type === 'vod' ? 'movie' : 'series'
+          type: mappedType
         }));
         
         await db.streams.bulkAdd(toCache);
@@ -128,14 +133,15 @@ export class CacheService {
     } catch (error) {
       console.error('Error fetching streams:', error);
       // Fallback to cache if fetch fails
-      let query;
-      if (categoryId) {
-        query = db.streams.where('[accountId+type+category_id]').equals([account.id, type, categoryId]);
-      } else {
-        query = db.streams.where('[accountId+type]').equals([account.id, type]);
+      const allCachedForType = await db.streams.where('[accountId+type]').equals([account.id, mappedType]).toArray();
+      if (allCachedForType.length > 0) {
+          if (categoryId) {
+             const filtered = allCachedForType.filter(s => String(s.category_id) === String(categoryId));
+             if (filtered.length > 0) return filtered;
+          } else {
+             return allCachedForType;
+          }
       }
-      const cached = await query.toArray();
-      if (cached.length > 0) return cached;
       throw error;
     }
 

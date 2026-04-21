@@ -59,6 +59,10 @@ export const AccountDetailView: React.FC<{ onBack: () => void; onPlayDownload?: 
   const [updateOptions, setUpdateOptions] = useState({ live: true, vod: true, series: true, epg: false });
   const [isUpdating, setIsUpdating] = useState(false);
   const [updateProgressData, setUpdateProgressData] = useState({ step: '', percent: 0 });
+
+  // -- DIALOG/POPUP STATE --
+  const [infoModal, setInfoModal] = useState<{ isOpen: boolean; title: string; message: string; type: 'success' | 'error' | 'info' | 'warning' }>({ isOpen: false, title: '', message: '', type: 'info' });
+  const [confirmModal, setConfirmModal] = useState<{ isOpen: boolean; title: string; message: string; action: () => void; isWarning?: boolean }>({ isOpen: false, title: '', message: '', action: () => {}, isWarning: false });
   
   useEffect(() => {
     setActiveTab(tabFromUrl);
@@ -152,28 +156,37 @@ export const AccountDetailView: React.FC<{ onBack: () => void; onPlayDownload?: 
         await cacheService.prefetchCatalogue(account, (step, percent) => {
           setPreloadProgressData({ step, percent });
         });
-        alert('Toutes les catégories et listes de flux ont été mises en cache avec succès pour une navigation hors-ligne !');
+        setInfoModal({ isOpen: true, title: 'Succès', message: 'Toutes les catégories et listes de flux ont été mises en cache avec succès pour une navigation hors-ligne !', type: 'success' });
       } catch (err) {
         console.error("Erreur de préchargement:", err);
-        alert('Une erreur est survenue lors du préchargement. Certaines données pourraient manquer.');
+        setInfoModal({ isOpen: true, title: 'Erreur', message: 'Une erreur est survenue lors du préchargement. Certaines données pourraient manquer.', type: 'error' });
       } finally {
         setIsPreloading(false);
       }
     }
   };
 
-  const handleClearLocalCache = async () => {
+  const handleClearLocalCache = () => {
     if (!account) return;
-    if (window.confirm("Voulez-vous vraiment supprimer toutes les données de cette playlist du cache local (catégories, flux, EPG) ? Cela forcera l'application à les re-télécharger.")) {
-      try {
-        await db.clearAccountData(account.id);
-        // Reset preload preference so the prompt shows up again if desired
-        await db.accounts.update(account.id, { preloadPreference: undefined });
-        alert("Cache vidé avec succès !");
-      } catch (err) {
-        console.error("Erreur vidage cache:", err);
-      }
-    }
+    setConfirmModal({
+        isOpen: true,
+        title: 'Vider le cache',
+        message: "Voulez-vous vraiment supprimer toutes les données de cette playlist du cache local (catégories, flux, EPG) ? Cela forcera l'application à les re-télécharger.",
+        isWarning: true,
+        action: async () => {
+            try {
+                await db.clearAccountData(account.id);
+                // Reset preload preference so the prompt shows up again if desired
+                await db.accounts.update(account.id, { preloadPreference: undefined });
+                setConfirmModal(prev => ({ ...prev, isOpen: false }));
+                setInfoModal({ isOpen: true, title: 'Cache vidé', message: 'Le cache a été vidé avec succès !', type: 'success' });
+            } catch (err) {
+                console.error("Erreur vidage cache:", err);
+                setConfirmModal(prev => ({ ...prev, isOpen: false }));
+                setInfoModal({ isOpen: true, title: 'Erreur', message: 'Impossible de vider le cache.', type: 'error' });
+            }
+        }
+    });
   };
 
   const handleUpdatePlaylist = async () => {
@@ -184,10 +197,10 @@ export const AccountDetailView: React.FC<{ onBack: () => void; onPlayDownload?: 
           await cacheService.updateCatalogue(account, updateOptions, (step, percent) => {
               setUpdateProgressData({ step, percent });
           });
-          alert('Mise à jour complète et réussie !');
+          setInfoModal({ isOpen: true, title: 'Mise à jour réussie', message: 'Mise à jour complète et réussie !', type: 'success' });
       } catch (err) {
           console.error("Erreur de mise à jour:", err);
-          alert('Erreur lors de la mise à jour de la playlist.');
+          setInfoModal({ isOpen: true, title: 'Erreur', message: 'Erreur lors de la mise à jour de la playlist.', type: 'error' });
       } finally {
           setIsUpdating(false);
       }
@@ -1078,6 +1091,29 @@ export const AccountDetailView: React.FC<{ onBack: () => void; onPlayDownload?: 
                       <Button onClick={handleUpdatePlaylist} disabled={!updateOptions.live && !updateOptions.vod && !updateOptions.series && !updateOptions.epg}>Démarrer la mise à jour</Button>
                   </div>
               </div>
+         </Modal>
+
+         {/* CUSTOM INFO MODAL */}
+         <Modal 
+            isOpen={infoModal.isOpen} 
+            onCancel={() => setInfoModal({ ...infoModal, isOpen: false })} 
+            title={infoModal.title} 
+            type={infoModal.type as any}
+         >
+            <p>{infoModal.message}</p>
+         </Modal>
+
+         {/* CUSTOM CONFIRM MODAL */}
+         <Modal 
+            isOpen={confirmModal.isOpen} 
+            onCancel={() => setConfirmModal({ ...confirmModal, isOpen: false })} 
+            onConfirm={confirmModal.action}
+            title={confirmModal.title} 
+            type={confirmModal.isWarning ? 'warning' : 'confirm'}
+            confirmLabel="Oui, continuer"
+            cancelLabel="Annuler"
+         >
+            <p>{confirmModal.message}</p>
          </Modal>
 
       </div>
