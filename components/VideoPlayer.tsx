@@ -537,6 +537,33 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       video.load();
       attemptPlay();
       
+      const extractNativeTracks = () => {
+          const v = video as any;
+          if (v.audioTracks && v.audioTracks.length > 0) {
+              const aTracks = [];
+              for(let i = 0; i < v.audioTracks.length; i++) {
+                 const t = v.audioTracks[i];
+                 aTracks.push({ id: i, name: t.label || `Piste ${i+1}`, lang: t.language || '' });
+              }
+              setAudioTracks(aTracks);
+              for(let i = 0; i < v.audioTracks.length; i++) {
+                 if (v.audioTracks[i].enabled) setCurrentAudioTrack(i);
+              }
+          }
+          if (video.textTracks && video.textTracks.length > 0) {
+              const sTracks = [];
+              for(let i = 0; i < video.textTracks.length; i++) {
+                 const t = video.textTracks[i];
+                 sTracks.push({ id: i, name: t.label || `Sous-titre ${i+1}`, lang: t.language || '' });
+                 if (t.mode === 'showing') setCurrentSubtitleTrack(i);
+              }
+              setSubtitleTracks(sTracks);
+          }
+      };
+      
+      (window as any).__extractNativeTracks = extractNativeTracks;
+      video.addEventListener('loadedmetadata', extractNativeTracks);
+      
       video.onerror = () => {
           const err = video.error;
           let msg = "Erreur de lecture.";
@@ -602,6 +629,8 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         video.removeEventListener('waiting', onWaiting);
         video.removeEventListener('playing', onPlaying);
         video.removeEventListener('pause', onPause);
+        // Cast video to any to ignore the specific listener signature
+        (video as any).removeEventListener('loadedmetadata', (window as any).__extractNativeTracks);
         video.onerror = null;
       }
     };
@@ -1180,6 +1209,13 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                                                         const tracks = shakaRef.current.getVariantTracks();
                                                         const selected = tracks.find((t: any) => t.id === track.id);
                                                         if (selected) shakaRef.current.selectVariantTrack(selected, true);
+                                                    } else if (videoRef.current) {
+                                                        const v = videoRef.current as any;
+                                                        if (v.audioTracks) {
+                                                            for(let i = 0; i < v.audioTracks.length; i++) {
+                                                                v.audioTracks[i].enabled = (i === track.id);
+                                                            }
+                                                        }
                                                     }
                                                     setCurrentAudioTrack(track.id);
                                                     setActiveMenu('none');
@@ -1212,6 +1248,13 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                                                 hlsRef.current.subtitleTrack = -1;
                                             } else if (shakaRef.current) {
                                                 shakaRef.current.setTextTrackVisibility(false);
+                                            } else if (videoRef.current) {
+                                                const v = videoRef.current;
+                                                if (v.textTracks) {
+                                                    for(let i = 0; i < v.textTracks.length; i++) {
+                                                        v.textTracks[i].mode = 'hidden';
+                                                    }
+                                                }
                                             }
                                             setCurrentSubtitleTrack(-1);
                                             setActiveMenu('none');
@@ -1237,6 +1280,13 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                                                         if (selected) {
                                                             shakaRef.current.selectTextTrack(selected);
                                                             shakaRef.current.setTextTrackVisibility(true);
+                                                        }
+                                                    } else if (videoRef.current) {
+                                                        const v = videoRef.current;
+                                                        if (v.textTracks) {
+                                                            for(let i = 0; i < v.textTracks.length; i++) {
+                                                                v.textTracks[i].mode = (i === track.id) ? 'showing' : 'hidden';
+                                                            }
                                                         }
                                                     }
                                                     setCurrentSubtitleTrack(track.id);
