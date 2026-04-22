@@ -7,6 +7,7 @@ import {
   ChevronUp, ChevronDown, Search, MonitorPlay, Tv, PictureInPicture,
   RotateCcw, RotateCw, Film, Link, Check
 } from 'lucide-react';
+import shaka from 'shaka-player';
 import Hls from 'hls.js';
 import mpegts from 'mpegts.js';
 import { XtreamStream, XtreamAccount } from '../types';
@@ -97,6 +98,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   // Audio Tracks State
   const hlsRef = useRef<Hls | null>(null);
   const mpegtsRef = useRef<mpegts.Player | null>(null);
+  const shakaRef = useRef<any>(null); // Shaka Player instance for MKV
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [audioTracks, setAudioTracks] = useState<{id: number, name: string, lang: string}[]>([]);
   const [currentAudioTrack, setCurrentAudioTrack] = useState<number>(-1);
@@ -270,10 +272,11 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
     const isM3U8 = url.toLowerCase().includes('.m3u8');
     const isTS = url.toLowerCase().includes('.ts') || url.toLowerCase().includes('.m2ts');
+    const isMKV = url.toLowerCase().includes('.mkv');
     
     // In Xtream, if it doesn't have .m3u8, it's likely MPEG-TS even for live
-    const isHls = isM3U8 || (type === 'live' && !isTS);
-    const isMpegTs = isTS && !isM3U8;
+    const isHls = isM3U8 || (type === 'live' && !isTS && !isMKV);
+    const isMpegTs = isTS && !isM3U8 && !isMKV;
 
     // Do not use proxy for direct stream URLs as per user request (Xtream servers may block proxy IP)
     const finalUrl = url;
@@ -325,7 +328,55 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         return playerSettings.reconnectDelay;
     };
 
-    if (isHls && Hls.isSupported()) {
+    if (isMKV && shaka.Player.isBrowserSupported()) {
+        const player = new shaka.Player(video);
+        shakaRef.current = player;
+        
+        // Disable warning logs from Shaka
+        (shaka as any).log.setLevel((shaka as any).log.Level.ERROR);
+        
+        player.addEventListener('error', (event: any) => {
+             console.error("Shaka MKV Error", event.detail);
+             setError("Erreur de décodage MKV via Shaka Player.");
+             setIsLoading(true);
+             setIsRetrying(true);
+             if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
+             const delay = getRetryDelay();
+             retryTimeoutRef.current = window.setTimeout(() => {
+                 setRetryCount(prev => prev + 1);
+             }, delay);
+        });
+
+        player.load(finalUrl).then(() => {
+             setIsLoading(false);
+             setIsRetrying(false);
+             setError(null);
+             attemptPlay();
+             
+             // Extract tracks if available
+             const tracks = player.getVariantTracks();
+             const audioMap = new Map();
+             tracks.forEach(t => {
+                if (t.language && !audioMap.has(t.language)) {
+                    audioMap.set(t.language, { id: t.id, name: t.roles?.join(', ') || `Piste`, lang: t.language });
+                }
+             });
+             setAudioTracks(Array.from(audioMap.values()));
+             
+             const textTracks = player.getTextTracks();
+             if (textTracks && textTracks.length > 0) {
+                 const subs = textTracks.map(t => ({ id: t.id, name: t.roles?.join(', ') || 'Sous-titre', lang: t.language }));
+                 setSubtitleTracks(subs);
+             }
+        }).catch((e: any) => {
+             console.error("Shaka Player load failed", e);
+             // Fallback to native if Shaka fails to demux this specific MKV
+             video.src = finalUrl;
+             video.load();
+             attemptPlay();
+        });
+        
+    } else if (isHls && Hls.isSupported()) {
       // Determine buffer settings based on user preference and stream type
       let maxBufferLength = 30;
       let maxMaxBufferLength = 600;
@@ -528,6 +579,10 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
           updateProgress(currentItem, video.currentTime, video.duration);
       }
 
+      if (shakaRef.current) {
+          shakaRef.current.destroy();
+          shakaRef.current = null;
+      }
       if (hlsRef.current) {
           hlsRef.current.destroy();
           hlsRef.current = null;
@@ -1121,8 +1176,12 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                                                 onClick={() => {
                                                     if (hlsRef.current) {
                                                         hlsRef.current.audioTrack = track.id;
-                                                        setCurrentAudioTrack(track.id);
+                                                    } else if (shakaRef.current) {
+                                                        const tracks = shakaRef.current.getVariantTracks();
+                                                        const selected = tracks.find((t: any) => t.id === track.id);
+                                                        if (selected) shakaRef.current.selectVariantTrack(selected, true);
                                                     }
+                                                    setCurrentAudioTrack(track.id);
                                                     setActiveMenu('none');
                                                 }}
                                                 className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors flex items-center justify-between
@@ -1151,8 +1210,10 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                                         onClick={() => {
                                             if (hlsRef.current) {
                                                 hlsRef.current.subtitleTrack = -1;
-                                                setCurrentSubtitleTrack(-1);
+                                            } else if (shakaRef.current) {
+                                                shakaRef.current.setTextTrackVisibility(false);
                                             }
+                                            setCurrentSubtitleTrack(-1);
                                             setActiveMenu('none');
                                         }}
                                         className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors flex items-center justify-between
@@ -1170,8 +1231,15 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                                                 onClick={() => {
                                                     if (hlsRef.current) {
                                                         hlsRef.current.subtitleTrack = track.id;
-                                                        setCurrentSubtitleTrack(track.id);
+                                                    } else if (shakaRef.current) {
+                                                        const tracks = shakaRef.current.getTextTracks();
+                                                        const selected = tracks.find((t: any) => t.id === track.id);
+                                                        if (selected) {
+                                                            shakaRef.current.selectTextTrack(selected);
+                                                            shakaRef.current.setTextTrackVisibility(true);
+                                                        }
                                                     }
+                                                    setCurrentSubtitleTrack(track.id);
                                                     setActiveMenu('none');
                                                 }}
                                                 className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors flex items-center justify-between
