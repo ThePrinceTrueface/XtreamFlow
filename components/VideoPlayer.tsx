@@ -332,9 +332,6 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         const player = new shaka.Player(video);
         shakaRef.current = player;
         
-        // Disable warning logs from Shaka
-        (shaka as any).log.setLevel((shaka as any).log.Level.ERROR);
-        
         player.addEventListener('error', (event: any) => {
              console.error("Shaka MKV Error", event.detail);
              setError("Erreur de décodage MKV via Shaka Player.");
