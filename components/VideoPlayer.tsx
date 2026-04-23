@@ -107,6 +107,12 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const [subtitleTracks, setSubtitleTracks] = useState<{id: number, name: string, lang: string}[]>([]);
   const [currentSubtitleTrack, setCurrentSubtitleTrack] = useState<number>(-1); // -1 means disabled
   const [showSubtitleMenu, setShowSubtitleMenu] = useState(false);
+  
+  const [activeUrl, setActiveUrl] = useState(url);
+  useEffect(() => {
+     setActiveUrl(url);
+     setRetryCount(0);
+  }, [url]);
 
   const controlsTimeoutRef = useRef<number | null>(null);
 
@@ -270,16 +276,16 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     setIsLoading(true);
     setIsRetrying(false);
 
-    const isM3U8 = url.toLowerCase().includes('.m3u8');
-    const isTS = url.toLowerCase().includes('.ts') || url.toLowerCase().includes('.m2ts');
-    const isMKV = url.toLowerCase().includes('.mkv');
+    const isM3U8 = activeUrl.toLowerCase().includes('.m3u8');
+    const isTS = activeUrl.toLowerCase().includes('.ts') || activeUrl.toLowerCase().includes('.m2ts');
+    const isMKV = activeUrl.toLowerCase().includes('.mkv');
     
     // In Xtream, if it doesn't have .m3u8, it's likely MPEG-TS even for live
     const isHls = isM3U8 || (type === 'live' && !isTS && !isMKV);
     const isMpegTs = isTS && !isM3U8 && !isMKV;
 
     // Do not use proxy for direct stream URLs as per user request (Xtream servers may block proxy IP)
-    const finalUrl = url;
+    const finalUrl = activeUrl;
     
     // Reset audio and subtitle tracks on new video
     setAudioTracks([]);
@@ -475,6 +481,12 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                     hls?.recoverMediaError();
                     break;
                 case Hls.ErrorTypes.NETWORK_ERROR:
+                    if ((data.details === Hls.ErrorDetails.MANIFEST_LOAD_ERROR || data.details === Hls.ErrorDetails.MANIFEST_LOAD_TIMEOUT || (data as any).response?.code === 404 || (data as any).response?.code === 500) && activeUrl.endsWith('.m3u8') && type === 'live') {
+                        console.warn("HLS Error: Manifest load failed. Server might not support .m3u8 for this live stream. Falling back to .ts ...");
+                        hls?.destroy();
+                        setActiveUrl(prevUrl => prevUrl.replace('.m3u8', '.ts'));
+                        return; // Exit and wait for the useEffect to re-trigger with .ts
+                    }
                 default:
                     hls?.destroy();
                     setIsLoading(true);
@@ -631,7 +643,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         video.onerror = null;
       }
     };
-  }, [url, retryCount, playerSettings.bufferSize]); 
+  }, [url, activeUrl, retryCount, playerSettings.bufferSize]); 
 
   // Handle Controls Visibility
   const handleMouseMove = () => {
