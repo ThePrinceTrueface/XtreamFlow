@@ -108,11 +108,32 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const [currentSubtitleTrack, setCurrentSubtitleTrack] = useState<number>(-1); // -1 means disabled
   const [showSubtitleMenu, setShowSubtitleMenu] = useState(false);
   
-  const [activeUrl, setActiveUrl] = useState(url);
+  const [activeUrl, setActiveUrl] = useState(() => {
+     let initialUrl = url;
+     if (type === 'live') {
+         const pref = playerSettings.liveStreamFormat || 'smart';
+         if (pref === 'ts' && initialUrl.endsWith('.m3u8')) {
+             initialUrl = initialUrl.replace('.m3u8', '.ts');
+         } else if ((pref === 'm3u8' || pref === 'smart') && initialUrl.endsWith('.ts')) {
+             initialUrl = initialUrl.replace('.ts', '.m3u8');
+         }
+     }
+     return initialUrl;
+  });
+  
   useEffect(() => {
-     setActiveUrl(url);
+     let newUrl = url;
+     if (type === 'live') {
+         const pref = playerSettings.liveStreamFormat || 'smart';
+         if (pref === 'ts' && newUrl.endsWith('.m3u8')) {
+             newUrl = newUrl.replace('.m3u8', '.ts');
+         } else if ((pref === 'm3u8' || pref === 'smart') && newUrl.endsWith('.ts')) {
+             newUrl = newUrl.replace('.ts', '.m3u8');
+         }
+     }
+     setActiveUrl(newUrl);
      setRetryCount(0);
-  }, [url]);
+  }, [url, type, playerSettings.liveStreamFormat]);
 
   const controlsTimeoutRef = useRef<number | null>(null);
 
@@ -481,7 +502,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                     hls?.recoverMediaError();
                     break;
                 case Hls.ErrorTypes.NETWORK_ERROR:
-                    if ((data.details === Hls.ErrorDetails.MANIFEST_LOAD_ERROR || data.details === Hls.ErrorDetails.MANIFEST_LOAD_TIMEOUT || (data as any).response?.code === 404 || (data as any).response?.code === 500) && activeUrl.endsWith('.m3u8') && type === 'live') {
+                    if ((data.details === Hls.ErrorDetails.MANIFEST_LOAD_ERROR || data.details === Hls.ErrorDetails.MANIFEST_LOAD_TIMEOUT || (data as any).response?.code === 404 || (data as any).response?.code === 500 || (data as any).response?.code === 458) && activeUrl.endsWith('.m3u8') && type === 'live' && (playerSettings.liveStreamFormat || 'smart') === 'smart') {
                         console.warn("HLS Error: Manifest load failed. Server might not support .m3u8 for this live stream. Falling back to .ts ...");
                         hls?.destroy();
                         setActiveUrl(prevUrl => prevUrl.replace('.m3u8', '.ts'));
@@ -1324,6 +1345,28 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                                 <h4 className="text-xs font-bold text-white/50 uppercase tracking-widest mb-3 text-center border-b border-white/5 pb-2">Options de lecture</h4>
                                 
                                 <div className="space-y-4 mt-3">
+                                    {type === 'live' && (
+                                        <div>
+                                            <p className="text-[10px] font-bold text-white/30 uppercase mb-2 ml-1">Format (Live)</p>
+                                            <div className="grid grid-cols-1 gap-1">
+                                                {[
+                                                    { id: 'smart', label: 'Smart (TS)', desc: 'M3U8 avec repli Auto' },
+                                                    { id: 'm3u8', label: 'M3U8', desc: 'Audio Multipistes' },
+                                                    { id: 'ts', label: 'TS', desc: 'Format le plus rapide' }
+                                                ].map((opt) => (
+                                                    <button
+                                                        key={opt.id}
+                                                        onClick={() => updatePlayerSettings({ liveStreamFormat: opt.id as any })}
+                                                        className={`text-left px-3 py-1.5 rounded-lg text-xs transition-colors
+                                                            ${(playerSettings.liveStreamFormat === opt.id || (!playerSettings.liveStreamFormat && opt.id === 'smart')) ? 'bg-white/10 text-white font-bold border border-white/20' : 'text-white/50 hover:bg-white/5 border border-transparent'}`}
+                                                    >
+                                                        {opt.label}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
                                     <div>
                                         <p className="text-[10px] font-bold text-white/30 uppercase mb-2 ml-1">Mémoire tampon (Buffer)</p>
                                         <div className="grid grid-cols-1 gap-1">

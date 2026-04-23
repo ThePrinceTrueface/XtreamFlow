@@ -42,6 +42,7 @@ export interface PlayerSettings {
   reconnectDelay: ReconnectDelay;
   preferredAudioLanguage?: string;
   bufferSize?: 'small' | 'normal' | 'large';
+  liveStreamFormat?: 'smart' | 'm3u8' | 'ts';
 }
 
 export interface StreamProgress {

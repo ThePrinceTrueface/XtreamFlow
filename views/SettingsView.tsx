@@ -178,6 +178,17 @@ export const SettingsView: React.FC<{
                     <option value="Arabic">Arabic</option>
                     <option value="Original">Original</option>
                   </select>
+
+                  <label className="text-sm font-medium text-win-subtext mt-4">Format des flux Live</label>
+                  <select 
+                    className="bg-white/5 border border-white/10 rounded-md px-3 py-2 text-sm text-white focus:outline-none focus:border-white/30"
+                    value={playerSettings.liveStreamFormat || 'smart'}
+                    onChange={(e) => updatePlayerSettings({ liveStreamFormat: e.target.value as 'smart' | 'm3u8' | 'ts' })}
+                  >
+                    <option value="smart">Switch intelligent (Repli TS)</option>
+                    <option value="m3u8">Forcé M3U8 (Audio multiple)</option>
+                    <option value="ts">Forcé TS (Standard, plus rapide)</option>
+                  </select>
                 </div>
              </div>
           </div>
