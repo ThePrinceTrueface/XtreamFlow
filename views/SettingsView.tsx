@@ -201,6 +201,9 @@ export const SettingsView: React.FC<{
              <div>
                 <h3 className="text-lg font-medium mb-1">Application</h3>
                 <p className="text-fluent-subtext text-sm">Version 1.0.0 Alpha (Sync Core)</p>
+                <div className="mt-2 text-xs text-white/50 border-t border-white/5 pt-2">
+                   Propulsé par <span className="text-fluent-accent font-medium">Ebinasoft</span> et créé par le <span className="text-fluent-accent font-medium">prince true-face</span>.
+                </div>
              </div>
            </div>
         </Card>

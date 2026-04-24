@@ -197,6 +197,15 @@ export const Dashboard: React.FC<{ accounts: XtreamAccount[]; setView: (v: ViewS
           />
         </div>
       </div>
+      
+      {/* Footer Credits */}
+      <div className="pt-10 flex text-center justify-center animate-in fade-in duration-1000 delay-500">
+        <p className="text-sm font-medium text-win-subtext max-w-sm">
+          Propulsé par <span className="text-white">Ebinasoft</span>
+          <br className="my-1"/>
+          <span className="text-xs text-white/50">Créé par le <span className="text-fluent-accent">prince true-face</span></span>
+        </p>
+      </div>
     </div>
   );
 };
