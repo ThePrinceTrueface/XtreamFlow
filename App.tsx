@@ -93,6 +93,8 @@ export default function App() {
 
   // Global Search State
   const [isGlobalSearchOpen, setIsGlobalSearchOpen] = useState(false);
+  const accountMatch = location.pathname.match(/\/account\/([^\/]+)/);
+  const activeAccountId = accountMatch ? accountMatch[1] : null;
 
   const handleGlobalSearchResult = async (result: any) => {
     setIsGlobalSearchOpen(false);
@@ -124,12 +126,17 @@ export default function App() {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
         e.preventDefault();
-        setIsGlobalSearchOpen(true);
+        if (activeAccountId) {
+          setIsGlobalSearchOpen(true);
+        } else {
+          setToast({ message: 'Ouvrez un compte pour rechercher du contenu', show: true });
+          setTimeout(() => setToast({ message: '', show: false }), 3000);
+        }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [activeAccountId]);
 
   // Migration & Initial Load
   useEffect(() => {
@@ -430,7 +437,6 @@ export default function App() {
                 setView={(view) => navigate(`/${view}`)} 
                 isCollapsed={isSidebarCollapsed}
                 onToggle={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-                onOpenSearch={() => setIsGlobalSearchOpen(true)}
               />
               
               <main className={`flex-1 overflow-y-auto relative scroll-smooth bg-transparent transition-all duration-300 ${location.pathname === '/downloads' ? 'p-0' : 'p-6 md:p-8'}`}>
@@ -542,6 +548,7 @@ export default function App() {
           isOpen={isGlobalSearchOpen} 
           onClose={() => setIsGlobalSearchOpen(false)} 
           onSelectResult={handleGlobalSearchResult} 
+          accountId={activeAccountId}
         />
       </div>
     </AcrylicPanel>

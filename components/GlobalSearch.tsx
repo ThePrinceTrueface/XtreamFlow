@@ -8,12 +8,15 @@ interface GlobalSearchProps {
   isOpen: boolean;
   onClose: () => void;
   onSelectResult: (result: any) => void;
+  accountId?: string | null;
 }
 
-export const GlobalSearch: React.FC<GlobalSearchProps> = ({ isOpen, onClose, onSelectResult }) => {
+export const GlobalSearch: React.FC<GlobalSearchProps> = ({ isOpen, onClose, onSelectResult, accountId }) => {
   const [query, setQuery] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [isDebouncing, setIsDebouncing] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [results, setResults] = useState<{ streams: any[], epg: any[], accountsMap: Record<string, string> }>({ streams: [], epg: [], accountsMap: {} });
   const [filter, setFilter] = useState<'all' | 'live' | 'epg' | 'movie' | 'series'>('all');
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -24,6 +27,7 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ isOpen, onClose, onS
       setQuery('');
       setSearchQuery('');
       setFilter('all');
+      setResults({ streams: [], epg: [], accountsMap: {} });
     }
   }, [isOpen]);
 
@@ -31,10 +35,12 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ isOpen, onClose, onS
     if (query.length < 2) {
       setSearchQuery('');
       setIsDebouncing(false);
+      setResults({ streams: [], epg: [], accountsMap: {} });
       return;
     }
 
     setIsDebouncing(true);
+    setResults({ streams: [], epg: [], accountsMap: {} });
     const timer = setTimeout(() => {
       setSearchQuery(query);
       setIsDebouncing(false);
@@ -43,55 +49,75 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ isOpen, onClose, onS
     return () => clearTimeout(timer);
   }, [query]);
 
-  const results = useLiveQuery(async () => {
-    if (searchQuery.length < 2) return { streams: [], epg: [], accountsMap: {} };
-    
-    const q = searchQuery.toLowerCase();
-    
-    // Search streams (Live, VOD, Series)
-    let streams = await db.streams
-      .filter(stream => 
-        (stream.name || '').toLowerCase().includes(q) ||
-        (stream.plot || '').toLowerCase().includes(q) ||
-        (stream.cast || '').toLowerCase().includes(q) ||
-        (stream.director || '').toLowerCase().includes(q) ||
-        (stream.genre || '').toLowerCase().includes(q)
-      )
-      .limit(50)
-      .toArray();
+  useEffect(() => {
+    let isMounted = true;
 
-    if (filter !== 'all') {
-      if (filter === 'live') streams = streams.filter(s => s.type === 'live');
-      else if (filter === 'movie') streams = streams.filter(s => s.type === 'movie');
-      else if (filter === 'series') streams = streams.filter(s => s.type === 'series');
-    }
-      
-    // Search EPG
-    let epg = await db.epg
-      .filter(prog => 
-        (prog.title || '').toLowerCase().includes(q) || 
-        (prog.description || '').toLowerCase().includes(q)
-      )
-      .limit(50)
-      .toArray();
+    async function performSearch() {
+      if (searchQuery.length < 2 || !accountId) {
+        setResults({ streams: [], epg: [], accountsMap: {} });
+        setIsLoading(false);
+        return;
+      }
 
-    if (filter !== 'all' && filter !== 'epg') {
-        epg = [];
-    }
-    if (filter === 'live' || filter === 'movie' || filter === 'series') {
-        epg = [];
+      setIsLoading(true);
+      try {
+        const q = searchQuery.toLowerCase();
+        
+        // Search streams (Live, VOD, Series) ONLY for the active account
+        let streams = await db.streams
+          .where('accountId')
+          .equals(accountId)
+          .filter(stream => 
+            (stream.name || '').toLowerCase().includes(q) ||
+            (stream.plot || '').toLowerCase().includes(q) ||
+            (stream.cast || '').toLowerCase().includes(q) ||
+            (stream.director || '').toLowerCase().includes(q) ||
+            (stream.genre || '').toLowerCase().includes(q)
+          )
+          .limit(50)
+          .toArray();
+
+        if (filter !== 'all') {
+          if (filter === 'live') streams = streams.filter(s => s.type === 'live');
+          else if (filter === 'movie') streams = streams.filter(s => s.type === 'movie');
+          else if (filter === 'series') streams = streams.filter(s => s.type === 'series');
+        }
+          
+        // Search EPG ONLY for the active account
+        let epg = await db.epg
+          .where('accountId')
+          .equals(accountId)
+          .filter(prog => 
+            (prog.title || '').toLowerCase().includes(q) || 
+            (prog.description || '').toLowerCase().includes(q)
+          )
+          .limit(50)
+          .toArray();
+
+        if (filter !== 'all' && filter !== 'epg') {
+            epg = [];
+        }
+        if (filter === 'live' || filter === 'movie' || filter === 'series') {
+            epg = [];
+        }
+
+        // Fetch account name
+        const account = await db.accounts.get(accountId);
+        const accountsMap = account ? { [account.id]: account.name } : {};
+          
+        if (isMounted) {
+          setResults({ streams, epg, accountsMap });
+          setIsLoading(false);
+        }
+      } catch (error) {
+        console.error('Erreur lors de la recherche global:', error);
+        if (isMounted) setIsLoading(false);
+      }
     }
 
-    // Fetch account names
-    const accountIds = new Set([...streams.map(s => s.accountId), ...epg.map(e => e.accountId)]);
-    const accounts = await db.accounts.where('id').anyOf([...accountIds]).toArray();
-    const accountsMap = accounts.reduce((acc, curr) => {
-      acc[curr.id] = curr.name;
-      return acc;
-    }, {} as Record<string, string>);
-      
-    return { streams, epg, accountsMap };
-  }, [searchQuery, filter], { streams: [], epg: [], accountsMap: {} });
+    performSearch();
+    return () => { isMounted = false; };
+  }, [searchQuery, filter, accountId]);
 
   const filters: { label: string, value: typeof filter }[] = [
     { label: 'Tous', value: 'all' },
@@ -152,7 +178,7 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ isOpen, onClose, onS
                 <div className="py-12 text-center text-fluent-subtext">
                   Tapez au moins 2 caractères pour rechercher
                 </div>
-              ) : isDebouncing || query !== searchQuery ? (
+              ) : (isDebouncing || isLoading || query !== searchQuery) ? (
                 <div className="py-12 flex flex-col items-center justify-center gap-4">
                   <div className="w-10 h-10 border-4 border-fluent-accent/20 border-t-fluent-accent rounded-full animate-spin" />
                   <div className="text-fluent-subtext text-sm">Recherche en cours...</div>
