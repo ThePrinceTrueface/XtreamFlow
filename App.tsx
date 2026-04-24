@@ -124,6 +124,7 @@ export default function App() {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Global Search
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
         e.preventDefault();
         if (activeAccountId) {
@@ -133,10 +134,36 @@ export default function App() {
           setTimeout(() => setToast({ message: '', show: false }), 3000);
         }
       }
+
+      // App Navigation
+      if (e.ctrlKey || e.metaKey) {
+        switch (e.key.toLowerCase()) {
+          case 'h':
+            e.preventDefault();
+            navigate('/dashboard');
+            break;
+          case 'n':
+            e.preventDefault();
+            navigate('/add-account');
+            break;
+          case 'm':
+            e.preventDefault();
+            navigate('/manage-accounts');
+            break;
+          case 'd':
+            e.preventDefault();
+            navigate('/downloads');
+            break;
+          case 's':
+            e.preventDefault();
+            navigate('/settings');
+            break;
+        }
+      }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activeAccountId]);
+  }, [activeAccountId, navigate]);
 
   // Migration & Initial Load
   useEffect(() => {

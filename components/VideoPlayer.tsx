@@ -806,11 +806,16 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   // Keyboard Shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't trigger if typing in an input (though there aren't many here)
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+
       if (e.key === 'Escape') onClose();
-      if (e.key === ' ' || e.key === 'k') togglePlay();
+      if (e.key === ' ' || e.key === 'k') {
+        e.preventDefault();
+        togglePlay();
+      }
       if (e.key === 'f') toggleFullscreen();
       if (e.key === 's') handleStop();
-      if (e.key === 'ArrowDown') setShowAdvancedControls(prev => !prev);
       
       if (type !== 'live') {
         if (e.key === 'ArrowRight') skip(10);
@@ -820,11 +825,36 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         if (e.key === 'ArrowLeft') changeChannel('prev');
       }
 
+      // Volume Controls
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        const newVol = Math.min(1, volume + 0.05);
+        setVolume(newVol);
+        if (videoRef.current) {
+          videoRef.current.volume = newVol;
+          videoRef.current.muted = false;
+          setIsMuted(false);
+        }
+      }
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        const newVol = Math.max(0, volume - 0.05);
+        setVolume(newVol);
+        if (videoRef.current) {
+          videoRef.current.volume = newVol;
+          if (newVol === 0) {
+            videoRef.current.muted = true;
+            setIsMuted(true);
+          }
+        }
+      }
+
       if (e.key === 'm') toggleMute();
+      if (e.key === 'i') setShowInfo(prev => !prev);
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isPlaying, isMuted, isFullscreen, type, playlist, currentItem, changeChannel]);
+  }, [isPlaying, isMuted, isFullscreen, type, playlist, currentItem, changeChannel, volume, onClose]);
 
   const rootClasses = isEmbedded 
     ? "absolute inset-0 z-50 bg-black flex flex-col items-center justify-center animate-in fade-in duration-300 overflow-hidden"

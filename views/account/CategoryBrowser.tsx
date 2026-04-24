@@ -84,6 +84,7 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
   const ytPlayerRef = useRef<any>(null);
   const classicScrollRef = useRef<HTMLDivElement>(null); // Ref for Classic Mode Scroll Container
   const heroContainerRef = useRef<HTMLDivElement>(null); // Ref for Visibility Detection
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const ytContainerId = useMemo(() => `yt-player-${Math.random().toString(36).substr(2, 9)}`, []);
   const workerRef = useRef<Worker | null>(null);
   
@@ -177,6 +178,37 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
       }
       return () => workerRef.current?.terminate();
   }, [account?.id, type, uiMode]);
+
+  // Keyboard Shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Avoid triggering if child components (like player or modals) are handling it
+      if (player && (isPlayerFullWindow || uiMode === 'normal')) return;
+
+      if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      } else if (e.key === '/') {
+        // Only focus if not already in an input
+        if (!(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)) {
+          e.preventDefault();
+          searchInputRef.current?.focus();
+        }
+      } else if (e.key === 'Escape') {
+        if (searchQuery) {
+          handleSearch('');
+        } else {
+          handleGoBack();
+        }
+      } else if (e.key === 'r' && !e.ctrlKey && !e.metaKey) {
+        if (!(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)) {
+          loadCategories();
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [player, isPlayerFullWindow, uiMode, searchQuery, handleGoBack, loadCategories]);
 
   // Sync ref with state
   useEffect(() => { heroDetailRef.current = heroDetail; }, [heroDetail]);
@@ -800,7 +832,9 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
             </div>
             <div className="flex items-center gap-4">
                 <div className="relative group w-72">
-                    <input className="w-full bg-black/40 border border-white/10 rounded-control pl-9 pr-4 py-2 text-[13px] text-white focus:border-fluent-accent focus:bg-black/60 transition-all placeholder:text-fluent-subtext/40 font-normal"
+                    <input 
+                        ref={searchInputRef}
+                        className="w-full bg-black/40 border border-white/10 rounded-control pl-9 pr-4 py-2 text-[13px] text-white focus:border-fluent-accent focus:bg-black/60 transition-all placeholder:text-fluent-subtext/40 font-normal"
                         placeholder={`Chercher dans ${currentConfig.label}...`} value={searchQuery} onChange={(e) => handleSearch(e.target.value)} />
                     <Search size={15} className="absolute left-3 top-2.5 text-fluent-subtext/50" />
                 </div>
