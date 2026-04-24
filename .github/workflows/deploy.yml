@@ -27,6 +27,12 @@ jobs:
     - name: 🔨 Build projet (npm)
       run: npm run build
 
+    - name: 🧩 SPA routing fix (200.html)
+      run: |
+        cd dist              # <-- change en 'build' si besoin
+        cp index.html 200.html
+      # Sous Windows runner ça serait 'copy', mais sur ubuntu 'cp' marche.
+
     - name: 📤 Deploy Surge
       uses: dswistowski/surge-sh-action@v1
       with:
