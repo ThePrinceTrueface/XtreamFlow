@@ -51,6 +51,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const { updateProgress, getProgress, getPlayerSettings, updatePlayerSettings } = useUserPreferences(account?.id || 'guest');
   const playerSettings = getPlayerSettings();
   const saveIntervalRef = useRef<number | null>(null);
+  const isDraggingRef = useRef(false);
 
   // Player State
   const [isPlaying, setIsPlaying] = useState(true); // Auto-play
@@ -613,7 +614,11 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       };
     }
 
-    const updateTime = () => setCurrentTime(video.currentTime);
+    const updateTime = () => {
+        if (!isDraggingRef.current) {
+            setCurrentTime(video.currentTime);
+        }
+    };
     const updateDuration = () => setDuration(video.duration);
     const onWaiting = () => setIsLoading(true);
     const onPlaying = () => {
@@ -714,6 +719,14 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     const time = parseFloat(e.target.value);
     setCurrentTime(time);
     if (videoRef.current) videoRef.current.currentTime = time;
+  };
+
+  const handleSeekStart = () => {
+    isDraggingRef.current = true;
+  };
+
+  const handleSeekEnd = () => {
+    isDraggingRef.current = false;
   };
 
   const skip = (seconds: number) => {
@@ -1006,6 +1019,10 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                         max={duration || 100} 
                         value={currentTime} 
                         onChange={handleSeek}
+                        onMouseDown={handleSeekStart}
+                        onMouseUp={handleSeekEnd}
+                        onTouchStart={handleSeekStart}
+                        onTouchEnd={handleSeekEnd}
                         className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                     />
                 )}

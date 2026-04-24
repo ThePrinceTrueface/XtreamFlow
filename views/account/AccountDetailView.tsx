@@ -11,6 +11,7 @@ import { cacheService } from '../../services/cacheService';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../db';
+import { useUserPreferences } from '../../hooks/useUserPreferences';
 
 interface RevisionResults {
   userInfo: any;
