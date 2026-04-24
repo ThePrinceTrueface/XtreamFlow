@@ -189,6 +189,26 @@ export const SettingsView: React.FC<{
                     <option value="m3u8">Forcé M3U8 (Audio multiple)</option>
                     <option value="ts">Forcé TS (Standard, plus rapide)</option>
                   </select>
+
+                  <label className="text-sm font-medium text-win-subtext mt-4">Lecture Automatique (Séries)</label>
+                  <div className="flex items-center gap-3 mt-1">
+                    <button
+                      onClick={() => updatePlayerSettings({ autoPlayEpisodes: !(playerSettings.autoPlayEpisodes ?? true) })}
+                      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full transition-colors focus:outline-none ring-1 ring-white/10 ${
+                        (playerSettings.autoPlayEpisodes ?? true) ? 'bg-fluent-accent' : 'bg-white/10'
+                      }`}
+                    >
+                      <span className="sr-only">Activer la lecture automatique</span>
+                      <span
+                        className={`pointer-events-none absolute left-0 inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-1 ring-black/5 transition duration-200 ease-in-out ${
+                          (playerSettings.autoPlayEpisodes ?? true) ? 'translate-x-4' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                    <span className="text-sm text-white/70">
+                      {(playerSettings.autoPlayEpisodes ?? true) ? 'Activé' : 'Désactivé'}
+                    </span>
+                  </div>
                 </div>
              </div>
           </div>

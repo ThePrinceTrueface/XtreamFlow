@@ -734,10 +734,10 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     }
   };
 
-  const changeChannel = (direction: 'next' | 'prev') => {
+  const changeChannel = useCallback((direction: 'next' | 'prev') => {
       if (!playlist || !currentItem || !onChannelSelect) return;
       
-      const idx = playlist.findIndex(item => item.stream_id === currentItem.stream_id);
+      const idx = playlist.findIndex(item => (item.stream_id || item.id) === (currentItem.stream_id || currentItem.id));
       if (idx === -1) return;
 
       let newIdx = direction === 'next' ? idx + 1 : idx - 1;
@@ -745,7 +745,13 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       if (newIdx < 0) newIdx = playlist.length - 1;
 
       onChannelSelect(playlist[newIdx]);
-  };
+  }, [playlist, currentItem, onChannelSelect]);
+
+  const handleVideoEnded = useCallback(() => {
+      if (type === 'series' && (playerSettings.autoPlayEpisodes ?? true)) {
+          changeChannel('next');
+      }
+  }, [type, playerSettings.autoPlayEpisodes, changeChannel]);
 
   const handleManualScroll = (direction: 'left' | 'right') => {
     if (scrollContainerRef.current) {
@@ -795,7 +801,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isPlaying, isMuted, isFullscreen, type, playlist, currentItem]);
+  }, [isPlaying, isMuted, isFullscreen, type, playlist, currentItem, changeChannel]);
 
   const rootClasses = isEmbedded 
     ? "absolute inset-0 z-50 bg-black flex flex-col items-center justify-center animate-in fade-in duration-300 overflow-hidden"
@@ -867,6 +873,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
             className="w-full h-full object-contain"
             onClick={togglePlay}
             onDoubleClick={onToggleEmbed ? onToggleEmbed : toggleFullscreen}
+            onEnded={handleVideoEnded}
         />
 
         {/* Info Overlay */}

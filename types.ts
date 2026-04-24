@@ -43,6 +43,7 @@ export interface PlayerSettings {
   preferredAudioLanguage?: string;
   bufferSize?: 'small' | 'normal' | 'large';
   liveStreamFormat?: 'smart' | 'm3u8' | 'ts';
+  autoPlayEpisodes?: boolean;
 }
 
 export interface StreamProgress {
