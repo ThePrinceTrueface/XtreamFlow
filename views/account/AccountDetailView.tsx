@@ -45,9 +45,15 @@ export const AccountDetailView: React.FC<{ onBack: () => void; onPlayDownload?: 
   const itemIdFromUrl = currentPath.length > 4 ? currentPath[4] : undefined;
   const episodeIdFromUrl = currentPath.length > 5 ? currentPath[5] : undefined;
   
+  const searchParams = new URLSearchParams(location.search);
+  const autoPlayFromUrl = searchParams.get('autoplay') === 'true';
+
   const [activeTab, setActiveTab] = useState(tabFromUrl);
   const [visitedTabs, setVisitedTabs] = useState<Set<string>>(new Set([tabFromUrl]));
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  
+  const { getAutoPlayNavigation } = useUserPreferences(accountId || '');
+  const autoPlayItem = autoPlayFromUrl || getAutoPlayNavigation();
   
   // -- PRELOAD STATE --
   const [showPreloadPrompt, setShowPreloadPrompt] = useState(false);
@@ -675,19 +681,19 @@ export const AccountDetailView: React.FC<{ onBack: () => void; onPlayDownload?: 
          {/* Category Browsers */}
          {visitedTabs.has('live') && account && (
             <div className="w-full h-full" style={{ display: activeTab === 'live' ? 'block' : 'none' }}>
-                <CategoryBrowser account={account} type="live" preselectedChannelId={categoryIdFromUrl} preselectedItemId={itemIdFromUrl} isActive={activeTab === 'live'} />
+                <CategoryBrowser account={account} type="live" preselectedChannelId={categoryIdFromUrl} preselectedItemId={itemIdFromUrl} isActive={activeTab === 'live'} autoPlay={autoPlayItem} />
             </div>
          )}
 
          {visitedTabs.has('vod') && account && (
             <div className="w-full h-full" style={{ display: activeTab === 'vod' ? 'block' : 'none' }}>
-                <CategoryBrowser account={account} type="vod" preselectedItemId={itemIdFromUrl} preselectedEpisodeId={episodeIdFromUrl} isActive={activeTab === 'vod'} />
+                <CategoryBrowser account={account} type="vod" preselectedItemId={itemIdFromUrl} preselectedEpisodeId={episodeIdFromUrl} isActive={activeTab === 'vod'} autoPlay={autoPlayItem} />
             </div>
          )}
 
          {visitedTabs.has('series') && account && (
             <div className="w-full h-full" style={{ display: activeTab === 'series' ? 'block' : 'none' }}>
-                <CategoryBrowser account={account} type="series" preselectedItemId={itemIdFromUrl} preselectedEpisodeId={episodeIdFromUrl} isActive={activeTab === 'series'} />
+                <CategoryBrowser account={account} type="series" preselectedItemId={itemIdFromUrl} preselectedEpisodeId={episodeIdFromUrl} isActive={activeTab === 'series'} autoPlay={autoPlayItem} />
             </div>
          )}
 

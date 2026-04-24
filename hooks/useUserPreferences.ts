@@ -189,6 +189,23 @@ export const useUserPreferences = (accountId: string) => {
     });
   }, [accountId]);
 
+  const getAutoPlayNavigation = useCallback(() => {
+    return prefs[accountId]?.autoPlayNavigation ?? false; // default false
+  }, [prefs, accountId]);
+
+  const toggleAutoPlayNavigation = useCallback((value: boolean) => {
+    setPrefs(prev => {
+      const accountData = prev[accountId] || { favoritesTable: { live: [], vod: [], series: [] }, history: {} } as AccountPreferences;
+      return {
+        ...prev,
+        [accountId]: {
+          ...accountData,
+          autoPlayNavigation: value
+        }
+      };
+    });
+  }, [accountId]);
+
   return {
     isFavorite,
     toggleFavorite,
@@ -197,6 +214,8 @@ export const useUserPreferences = (accountId: string) => {
     updateProgress,
     clearProgress,
     getPlayerSettings,
-    updatePlayerSettings
+    updatePlayerSettings,
+    getAutoPlayNavigation,
+    toggleAutoPlayNavigation
   };
 };

@@ -108,12 +108,12 @@ export default function App() {
 
       const streamId = stream.stream_id || stream.series_id;
       const type = stream.type === 'live' ? 'live' : stream.type === 'movie' ? 'vod' : 'series';
-      navigate(`/account/${account.id}/${type}/all/${streamId}`);
+      navigate(`/account/${account.id}/${type}/all/${streamId}?autoplay=true`);
     } else if (result.type === 'epg') {
       const prog = result.data;
       const account = await db.accounts.get(prog.accountId);
       if (account) {
-        navigate(`/account/${account.id}/live/all/${prog.channel_id}`);
+        navigate(`/account/${account.id}/live/all/${prog.channel_id}?autoplay=true`);
         setToast({ message: `Programme: ${prog.title}`, show: true });
         setTimeout(() => setToast({ message: '', show: false }), 4000);
       }

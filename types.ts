@@ -63,6 +63,7 @@ export interface AccountPreferences {
   };
   history: Record<string, StreamProgress>; // Key is stream_id/episode_id
   playerSettings?: PlayerSettings;
+  autoPlayNavigation?: boolean; // Controls whether detail pages auto-play (default false)
 }
 
 export interface GlobalPreferences {

@@ -32,9 +32,10 @@ interface CategoryBrowserProps {
     preselectedEpisodeId?: string;
     preselectedSeason?: string;
     isActive?: boolean;
+    autoPlay?: boolean;
 }
 
-export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type, preselectedChannelId, preselectedItemId, preselectedItemType, preselectedEpisodeId, preselectedSeason, isActive = true }) => {
+export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type, preselectedChannelId, preselectedItemId, preselectedItemType, preselectedEpisodeId, preselectedSeason, isActive = true, autoPlay = false }) => {
   // ...
   
   const navigate = useNavigate();
@@ -684,7 +685,7 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
 
   // Handle Auto-play for preselected items (Moved after handlePlay/handlePlayEpisode declarations)
   useEffect(() => {
-    if (loading || fullData.length === 0 || !preselectedItemId) return;
+    if (loading || fullData.length === 0 || !preselectedItemId || !autoPlay) return;
     if (autoPlayedRef.current === preselectedItemId) return;
 
     const itemIdStr = preselectedItemId.toString();
