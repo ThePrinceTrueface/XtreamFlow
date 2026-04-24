@@ -1191,10 +1191,26 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                         <MonitorPlay size={24} />
                         <span className="text-[10px] font-medium">Multi-Vue</span>
                     </button>
-                    <button className="flex flex-col items-center gap-1.5 transition-colors text-white/70 hover:text-white">
-                        <PictureInPicture size={24} />
-                        <span className="text-[10px] font-medium">PiP</span>
-                    </button>
+                    {document.pictureInPictureEnabled && (
+                        <button 
+                            onClick={async () => {
+                                try {
+                                    if (document.pictureInPictureElement) {
+                                        await document.exitPictureInPicture();
+                                    } else if (videoRef.current) {
+                                        await videoRef.current.requestPictureInPicture();
+                                    }
+                                } catch (error) {
+                                    console.error('Failed to toggle PiP:', error);
+                                }
+                            }}
+                            className="flex flex-col items-center gap-1.5 transition-colors text-white/70 hover:text-white"
+                            title="Picture in Picture"
+                        >
+                            <PictureInPicture size={24} />
+                            <span className="text-[10px] font-medium">PiP</span>
+                        </button>
+                    )}
                     
                     <button 
                         onClick={async () => {
