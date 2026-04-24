@@ -46,13 +46,22 @@ export class AppDatabase extends Dexie {
     });
   }
 
-  // Helper to clear account data
-  async clearAccountData(accountId: string) {
+  // Helper to clear account cache (metadata)
+  async clearAccountCache(accountId: string) {
     await Promise.all([
       this.streams.where('accountId').equals(accountId).delete(),
       this.categories.where('accountId').equals(accountId).delete(),
       this.epg.where('accountId').equals(accountId).delete(),
       this.streamDetails.where('accountId').equals(accountId).delete()
+    ]);
+  }
+
+  // Helper to delete ALL account data including history and downloads
+  async deleteAccountData(accountId: string) {
+    await Promise.all([
+      this.clearAccountCache(accountId),
+      this.history.where('accountId').equals(accountId).delete(),
+      this.downloads.where('accountId').equals(accountId).delete()
     ]);
   }
 }

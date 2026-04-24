@@ -247,7 +247,7 @@ export default function App() {
       'Are you sure you want to permanently remove this account? This action cannot be undone.',
       async () => {
         await db.accounts.delete(id);
-        await db.clearAccountData(id);
+        await db.deleteAccountData(id);
         if (editingAccount?.id === id) {
           setEditingAccount(null);
           navigate('/manage-accounts');

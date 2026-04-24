@@ -175,7 +175,7 @@ export const AccountDetailView: React.FC<{ onBack: () => void; onPlayDownload?: 
         isWarning: true,
         action: async () => {
             try {
-                await db.clearAccountData(account.id);
+                await db.clearAccountCache(account.id);
                 // Reset preload preference so the prompt shows up again if desired
                 await db.accounts.update(account.id, { preloadPreference: undefined });
                 setConfirmModal(prev => ({ ...prev, isOpen: false }));

@@ -1,5 +1,5 @@
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { 
   Play, Pause, Volume2, VolumeX, Maximize, Minimize, X, 
   SkipBack, SkipForward, Settings, List, ListVideo, ChevronLeft, ChevronRight, Square,
