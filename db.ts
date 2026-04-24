@@ -51,7 +51,8 @@ export class AppDatabase extends Dexie {
     await Promise.all([
       this.streams.where('accountId').equals(accountId).delete(),
       this.categories.where('accountId').equals(accountId).delete(),
-      this.epg.where('accountId').equals(accountId).delete()
+      this.epg.where('accountId').equals(accountId).delete(),
+      this.streamDetails.where('accountId').equals(accountId).delete()
     ]);
   }
 }
