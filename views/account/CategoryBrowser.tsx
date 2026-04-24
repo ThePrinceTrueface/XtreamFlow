@@ -31,9 +31,10 @@ interface CategoryBrowserProps {
     preselectedItemType?: string;
     preselectedEpisodeId?: string;
     preselectedSeason?: string;
+    isActive?: boolean;
 }
 
-export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type, preselectedChannelId, preselectedItemId, preselectedItemType, preselectedEpisodeId, preselectedSeason }) => {
+export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type, preselectedChannelId, preselectedItemId, preselectedItemType, preselectedEpisodeId, preselectedSeason, isActive = true }) => {
   // ...
   
   const navigate = useNavigate();
@@ -244,6 +245,17 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
       setIsPlayerFullWindow(false);
       setShowStreamList(true); // Reset list visibility
   }, []);
+
+  // Close player if tab becomes inactive
+  useEffect(() => {
+      if (!isActive) {
+          handleClosePlayer();
+          // Pause YT Trailer if it was playing
+          if (ytPlayerRef.current && typeof ytPlayerRef.current.pauseVideo === 'function') {
+              try { ytPlayerRef.current.pauseVideo(); } catch (e) {}
+          }
+      }
+  }, [isActive, handleClosePlayer]);
 
   // Load YouTube API Script Global
   useEffect(() => {

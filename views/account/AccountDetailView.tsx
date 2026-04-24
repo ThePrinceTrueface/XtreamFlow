@@ -675,19 +675,19 @@ export const AccountDetailView: React.FC<{ onBack: () => void; onPlayDownload?: 
          {/* Category Browsers */}
          {visitedTabs.has('live') && account && (
             <div className="w-full h-full" style={{ display: activeTab === 'live' ? 'block' : 'none' }}>
-                <CategoryBrowser account={account} type="live" preselectedChannelId={categoryIdFromUrl} preselectedItemId={itemIdFromUrl} />
+                <CategoryBrowser account={account} type="live" preselectedChannelId={categoryIdFromUrl} preselectedItemId={itemIdFromUrl} isActive={activeTab === 'live'} />
             </div>
          )}
 
          {visitedTabs.has('vod') && account && (
             <div className="w-full h-full" style={{ display: activeTab === 'vod' ? 'block' : 'none' }}>
-                <CategoryBrowser account={account} type="vod" preselectedItemId={itemIdFromUrl} preselectedEpisodeId={episodeIdFromUrl} />
+                <CategoryBrowser account={account} type="vod" preselectedItemId={itemIdFromUrl} preselectedEpisodeId={episodeIdFromUrl} isActive={activeTab === 'vod'} />
             </div>
          )}
 
          {visitedTabs.has('series') && account && (
             <div className="w-full h-full" style={{ display: activeTab === 'series' ? 'block' : 'none' }}>
-                <CategoryBrowser account={account} type="series" preselectedItemId={itemIdFromUrl} preselectedEpisodeId={episodeIdFromUrl} />
+                <CategoryBrowser account={account} type="series" preselectedItemId={itemIdFromUrl} preselectedEpisodeId={episodeIdFromUrl} isActive={activeTab === 'series'} />
             </div>
          )}
 
