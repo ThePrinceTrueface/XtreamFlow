@@ -241,6 +241,11 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
 
   // Reset player expansion when player closes
   const handleClosePlayer = useCallback(() => {
+      if (document.pictureInPictureElement) {
+          try {
+              document.exitPictureInPicture().catch(() => {});
+          } catch(e) {}
+      }
       setPlayer(null);
       setIsPlayerExpanded(false); // Reset to embedded for next time in flow mode
       setIsPlayerFullWindow(false);
@@ -250,6 +255,9 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
   // Close player if tab becomes inactive
   useEffect(() => {
       if (!isActive) {
+          if (document.pictureInPictureElement) {
+             return; // Keep player alive for PiP
+          }
           handleClosePlayer();
           // Pause YT Trailer if it was playing
           if (ytPlayerRef.current && typeof ytPlayerRef.current.pauseVideo === 'function') {

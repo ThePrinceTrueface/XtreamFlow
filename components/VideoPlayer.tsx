@@ -640,6 +640,12 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       if (video && type !== 'live' && currentItem) {
           updateProgress(currentItem, video.currentTime, video.duration);
       }
+      
+      if (document.pictureInPictureElement === video) {
+          try {
+              document.exitPictureInPicture().catch(() => {});
+          } catch(e) {}
+      }
 
       if (shakaRef.current) {
           shakaRef.current.destroy();
@@ -718,15 +724,19 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
     const time = parseFloat(e.target.value);
     setCurrentTime(time);
-    if (videoRef.current) videoRef.current.currentTime = time;
   };
 
   const handleSeekStart = () => {
     isDraggingRef.current = true;
   };
 
-  const handleSeekEnd = () => {
+  const handleSeekEnd = (e: any) => {
     isDraggingRef.current = false;
+    // Set video time only when dragging completes to avoid stalling the player with rapid seeks
+    const inputElement = e.target as HTMLInputElement;
+    if (inputElement && inputElement.value && videoRef.current) {
+       videoRef.current.currentTime = parseFloat(inputElement.value);
+    }
   };
 
   const skip = (seconds: number) => {

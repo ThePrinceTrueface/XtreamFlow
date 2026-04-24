@@ -27,10 +27,9 @@ jobs:
       run: pnpm run build
 
     - name: 📤 Deploy Surge
-      uses: dswistowski/surge-action@v1
+      uses: dswistowski/surge-sh-action@v1
       with:
-        domain: 'xtreamflow.surge.sh'  # ← VOTRE SUBDOMAIN
-        dist: dist/                     # ← OU 'build/'
-      env:
-        SURGE_LOGIN: ${{ secrets.SURGE_LOGIN }}
-        SURGE_TOKEN: ${{ secrets.SURGE_TOKEN }}
+        domain: 'xtreamflow.surge.sh'   # ton domaine complet
+        project: 'dist'                 # ou 'build' selon ton output
+        login: ${{ secrets.SURGE_LOGIN }}
+        token: ${{ secrets.SURGE_TOKEN }}
