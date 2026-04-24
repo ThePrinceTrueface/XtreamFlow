@@ -141,10 +141,42 @@ export const AddAccount: React.FC<{
     }
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = (andOpen: boolean = false) => {
+    const newAccount = validateAndBuildAccount();
+    if (!newAccount) return;
+    
+    onSave(newAccount);
+    
+    // Clear form if adding new
+    if (!initialData) {
+      setUrlInput('');
+      setHost('');
+      setUsername('');
+      setPassword('');
+      setName('');
+      setIsFavorite(false);
+      setTags([]);
+      setCurrentStatus('untested');
+      setTestResult(null);
+      
+      if (andOpen) {
+        navigate(`/account/${newAccount.id}`);
+      } else {
+        navigate('/manage-accounts');
+      }
+    } else {
+      if (andOpen) {
+        navigate(`/account/${newAccount.id}`);
+      } else {
+        navigate(-1);
+      }
+    }
+  };
+
+  const validateAndBuildAccount = (): XtreamAccount | null => {
     if (!host || !username || !password) {
       setError("Host, Username, and Password are required.");
-      return;
+      return null;
     }
 
     const newAccount: XtreamAccount = {
@@ -161,23 +193,7 @@ export const AddAccount: React.FC<{
       tags
     };
 
-    onSave(newAccount);
-    
-    // Clear form if adding new
-    if (!initialData) {
-      setUrlInput('');
-      setHost('');
-      setUsername('');
-      setPassword('');
-      setName('');
-      setIsFavorite(false);
-      setTags([]);
-      setCurrentStatus('untested');
-      setTestResult(null);
-      navigate('/manage-accounts');
-    } else {
-      navigate(-1);
-    }
+    return newAccount;
   };
 
   return (
@@ -379,7 +395,8 @@ export const AddAccount: React.FC<{
                         {isTesting ? <Loader2 size={16} className="animate-spin" /> : <Activity size={16} />}
                         <span>Test Connection</span>
                     </Button>
-                    <Button onClick={handleSubmit}>{initialData ? 'Update Account' : 'Save Account'}</Button>
+                    <Button variant="secondary" onClick={() => handleSubmit(true)} title="Save and immediately connect to this account">Save & Open</Button>
+                    <Button onClick={() => handleSubmit(false)}>{initialData ? 'Update Account' : 'Save Account'}</Button>
                 </div>
              </div>
           </div>
