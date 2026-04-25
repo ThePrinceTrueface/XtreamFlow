@@ -179,36 +179,6 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
       return () => workerRef.current?.terminate();
   }, [account?.id, type, uiMode]);
 
-  // Keyboard Shortcuts
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Avoid triggering if child components (like player or modals) are handling it
-      if (player && (isPlayerFullWindow || uiMode === 'normal')) return;
-
-      if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
-        e.preventDefault();
-        searchInputRef.current?.focus();
-      } else if (e.key === '/') {
-        // Only focus if not already in an input
-        if (!(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)) {
-          e.preventDefault();
-          searchInputRef.current?.focus();
-        }
-      } else if (e.key === 'Escape') {
-        if (searchQuery) {
-          handleSearch('');
-        } else {
-          handleGoBack();
-        }
-      } else if (e.key === 'r' && !e.ctrlKey && !e.metaKey) {
-        if (!(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)) {
-          loadCategories();
-        }
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [player, isPlayerFullWindow, uiMode, searchQuery, handleGoBack, loadCategories]);
 
   // Sync ref with state
   useEffect(() => { heroDetailRef.current = heroDetail; }, [heroDetail]);
@@ -722,6 +692,37 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
           navigate(`/account/${account.id}/${type}`);
       }
   }, [currentLevel, selectedCategory, account.id, type, navigate]);
+
+  // Keyboard Shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Avoid triggering if child components (like player or modals) are handling it
+      if (player && (isPlayerFullWindow || uiMode === 'normal')) return;
+
+      if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      } else if (e.key === '/') {
+        // Only focus if not already in an input
+        if (!(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)) {
+          e.preventDefault();
+          searchInputRef.current?.focus();
+        }
+      } else if (e.key === 'Escape') {
+        if (searchQuery) {
+          handleSearch('');
+        } else {
+          handleGoBack();
+        }
+      } else if (e.key === 'r' && !e.ctrlKey && !e.metaKey) {
+        if (!(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)) {
+          loadCategories();
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [player, isPlayerFullWindow, uiMode, searchQuery, handleGoBack, loadCategories]);
 
   // Handle Auto-play for preselected items (Moved after handlePlay/handlePlayEpisode declarations)
   useEffect(() => {

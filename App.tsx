@@ -21,6 +21,7 @@ import { ServerLibrary } from './views/ServerLibrary';
 import { DownloadManager } from './views/account/components/DownloadManager';
 import { VideoPlayer } from './components/VideoPlayer';
 import { GlobalSearch } from './components/GlobalSearch';
+import { ShortcutsModal } from './components/ShortcutsModal';
 
 // --- Custom Title Bar Component ---
 const TitleBar: React.FC = () => {
@@ -93,6 +94,7 @@ export default function App() {
 
   // Global Search State
   const [isGlobalSearchOpen, setIsGlobalSearchOpen] = useState(false);
+  const [isShortcutsModalOpen, setIsShortcutsModalOpen] = useState(false);
   const accountMatch = location.pathname.match(/\/account\/([^\/]+)/);
   const activeAccountId = accountMatch ? accountMatch[1] : null;
 
@@ -159,6 +161,11 @@ export default function App() {
             navigate('/settings');
             break;
         }
+      }
+
+      // Help Shortcut
+      if (e.key === '?' || (e.shiftKey && e.key === '/')) {
+        setIsShortcutsModalOpen(true);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -521,6 +528,7 @@ export default function App() {
                         onExport={handleExportData}
                         accentColor={accentColor}
                         onAccentColorChange={setAccentColor}
+                        onOpenShortcuts={() => setIsShortcutsModalOpen(true)}
                     />
                   } />
 
@@ -576,6 +584,11 @@ export default function App() {
           onClose={() => setIsGlobalSearchOpen(false)} 
           onSelectResult={handleGlobalSearchResult} 
           accountId={activeAccountId}
+        />
+
+        <ShortcutsModal 
+          isOpen={isShortcutsModalOpen} 
+          onClose={() => setIsShortcutsModalOpen(false)} 
         />
       </div>
     </AcrylicPanel>

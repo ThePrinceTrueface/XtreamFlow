@@ -1,6 +1,6 @@
 
 import React, { useRef, useState, useEffect } from 'react';
-import { Database, Download, Upload, Settings as SettingsIcon, Loader2, Palette, SlidersHorizontal } from 'lucide-react';
+import { Database, Download, Upload, Settings as SettingsIcon, Loader2, Palette, SlidersHorizontal, Keyboard } from 'lucide-react';
 import { XtreamAccount } from '../types';
 import { Card, Button } from '../components/Win11UI';
 import { createInlineWorker } from '../utils';
@@ -28,7 +28,8 @@ export const SettingsView: React.FC<{
   onExport: () => void;
   accentColor: string;
   onAccentColorChange: (color: string) => void;
-}> = ({ accounts, onImport, onExport, accentColor, onAccentColorChange }) => {
+  onOpenShortcuts: () => void;
+}> = ({ accounts, onImport, onExport, accentColor, onAccentColorChange, onOpenShortcuts }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const workerRef = useRef<Worker | null>(null);
@@ -248,6 +249,22 @@ export const SettingsView: React.FC<{
                 </div>
              </div>
            </div>
+        </Card>
+        <Card>
+          <div className="flex items-start gap-4">
+            <div className="p-3 bg-fluent-accent/10 rounded-lg text-fluent-accent">
+               <Keyboard size={24} />
+            </div>
+            <div className="flex-1">
+               <h3 className="text-lg font-medium mb-1">Accessibilité</h3>
+               <p className="text-fluent-subtext text-sm mb-4">
+                  Consultez la liste des raccourcis clavier disponibles pour naviguer plus rapidement.
+               </p>
+               <Button onClick={onOpenShortcuts} variant="secondary">
+                  <Keyboard size={16} className="mr-2" /> Voir les raccourcis
+               </Button>
+            </div>
+          </div>
         </Card>
       </div>
     </div>
