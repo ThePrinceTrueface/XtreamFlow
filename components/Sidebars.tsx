@@ -51,9 +51,10 @@ interface SidebarProps {
   isCollapsed: boolean;
   onToggle: () => void;
   onOpenSearch?: () => void;
+  isMobileMenuOpen?: boolean;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ activeView, setView, isCollapsed, onToggle, onOpenSearch }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ activeView, setView, isCollapsed, onToggle, onOpenSearch, isMobileMenuOpen }) => {
   const navigate = useNavigate();
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -67,9 +68,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeView, setView, isCollaps
   return (
     <div 
       className={`bg-fluent-micaAlt/50 border-r border-fluent-border flex flex-col pt-2 pb-2 px-2 backdrop-blur-xl transition-all duration-300 ease-in-out
+        absolute md:relative z-40 h-full
+        ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
         ${isCollapsed ? 'w-[68px]' : 'w-[260px]'}`}
     >
-      <div className={`flex items-center mb-4 mt-2 px-1 ${isCollapsed ? 'justify-center' : 'justify-between'}`}>
+      <div className={`flex items-center mb-4 mt-2 px-1 ${isCollapsed ? 'justify-center md:flex hidden' : 'justify-between'}`}>
         {!isCollapsed && (
           <div className="flex items-center gap-2 px-2">
             <div className="w-5 h-5 rounded-sm bg-fluent-accent flex items-center justify-center">
@@ -141,9 +144,10 @@ interface AccountSidebarProps {
   isCollapsed: boolean;
   onToggle: () => void;
   onOpenSearch?: () => void;
+  isMobileMenuOpen?: boolean;
 }
 
-export const AccountSidebar: React.FC<AccountSidebarProps> = ({ activeTab, setTab, onBack, accountName, isCollapsed, onToggle, onOpenSearch }) => {
+export const AccountSidebar: React.FC<AccountSidebarProps> = ({ activeTab, setTab, onBack, accountName, isCollapsed, onToggle, onOpenSearch, isMobileMenuOpen }) => {
   const navItems = [
     { id: 'info', label: 'Information', icon: InfoIcon },
     { id: 'live', label: 'Live TV', icon: Tv },
@@ -156,9 +160,11 @@ export const AccountSidebar: React.FC<AccountSidebarProps> = ({ activeTab, setTa
   return (
     <div 
       className={`bg-fluent-micaAlt/50 border-r border-fluent-border flex flex-col pt-2 px-2 backdrop-blur-xl transition-all duration-300 ease-in-out
+        absolute md:relative z-40 h-full
+        ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
         ${isCollapsed ? 'w-[68px]' : 'w-[260px]'}`}
     >
-      <div className={`mb-2 mt-2 flex flex-col ${isCollapsed ? 'items-center' : 'px-2'}`}>
+      <div className={`mb-2 mt-2 flex flex-col ${isCollapsed ? 'items-center md:flex hidden' : 'px-2'}`}>
          <div className={`flex items-center w-full mb-4 ${isCollapsed ? 'justify-center' : 'justify-between'}`}>
             {!isCollapsed && (
                <button 

@@ -754,12 +754,12 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
     }
   }, [loading, fullData, preselectedItemId, type, currentLevel, detailData, selectedItem, handlePlay, handlePlayEpisode]);
 
-  const handleGridClick = (item: XtreamStream) => {
+  function handleGridClick(item: XtreamStream) {
       if (type === 'live') handlePlay(item);
       else handleDetail(item);
-  };
+  }
 
-  const handleSearch = (query: string) => {
+  function handleSearch(query: string) {
     setSearchQuery(query);
     const q = query.toLowerCase().trim();
     if (workerRef.current && uiMode === 'flow') {
@@ -771,7 +771,7 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
             setDisplayData(fullData.filter(i => (i.name || '').toLowerCase().includes(q)));
         }
     }
-  };
+  }
 
   const heroItem = useMemo(() => {
      return heroIndex !== -1 && heroIndex < displayData.length ? displayData[heroIndex] : null;
@@ -906,7 +906,7 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
                         ) : (
                             // Browse Layout (Hero + Grids)
                             <div className="flex-1 overflow-y-auto custom-scrollbar relative h-full">
-                                <AnimatePresence mode="wait">
+                                <AnimatePresence>
                                     {loading ? (
                                         <motion.div 
                                             key="loading"
@@ -1027,7 +1027,7 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
             ) : (
                 // CLASSIC MODE (Existing Layout)
                 <div ref={classicScrollRef} className={`h-full overflow-y-auto custom-scrollbar relative ${viewMode === 'epg' && type === 'live' ? 'px-0' : 'px-10'}`}>
-                    <AnimatePresence mode="wait">
+                    <AnimatePresence>
                         {currentLevel === 'categories' ? (
                             <motion.div 
                                 key="categories"

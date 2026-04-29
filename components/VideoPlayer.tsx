@@ -760,7 +760,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const changeChannel = useCallback((direction: 'next' | 'prev') => {
       if (!playlist || !currentItem || !onChannelSelect) return;
       
-      const idx = playlist.findIndex(item => (item.stream_id || item.id) === (currentItem.stream_id || currentItem.id));
+      const idx = playlist.findIndex(item => (item.stream_id || (item as any).id) === (currentItem.stream_id || (currentItem as any).id));
       if (idx === -1) return;
 
       let newIdx = direction === 'next' ? idx + 1 : idx - 1;

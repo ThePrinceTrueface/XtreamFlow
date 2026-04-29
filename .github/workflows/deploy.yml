@@ -4,9 +4,6 @@ on:
   push:
     branches: [ main ]
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -21,22 +18,19 @@ jobs:
         node-version: 24
         cache: 'npm'
 
-    - name: 📦 Install deps (npm)
+    - name: 📦 Install deps
       run: npm install
 
-    - name: 🔨 Build projet (npm)
+    - name: 🔨 Build projet
       run: npm run build
 
     - name: 🧩 SPA routing fix (200.html)
       run: |
-        cd dist              # <-- change en 'build' si besoin
-        cp index.html 200.html
-      # Sous Windows runner ça serait 'copy', mais sur ubuntu 'cp' marche.
+        # Vérifiez que le dossier est bien 'dist'
+        cp dist/index.html dist/200.html
 
-    - name: 📤 Deploy Surge
-      uses: dswistowski/surge-sh-action@v1
-      with:
-        login: ${{ secrets.SURGE_LOGIN }}
-        token: ${{ secrets.SURGE_TOKEN }}
-        project: dist              # ou build, selon ton output
-        domain: xtreamflow.surge.sh
+    - name: 📤 Deploy to Surge
+      run: npx surge --project ./dist --domain xeval.surge.sh
+      env:
+        SURGE_LOGIN: ${{ secrets.SURGE_LOGIN }}
+        SURGE_TOKEN: ${{ secrets.SURGE_TOKEN }}

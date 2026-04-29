@@ -387,16 +387,16 @@ export const AddAccount: React.FC<{
                    )}
                 </div>
 
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2 justify-end">
                     <Button variant="ghost" onClick={initialData ? () => navigate(-1) : () => setMode('url')}>
                       {initialData ? 'Cancel' : 'Back'}
                     </Button>
                     <Button variant="secondary" onClick={handleTestConnection} disabled={isTesting}>
                         {isTesting ? <Loader2 size={16} className="animate-spin" /> : <Activity size={16} />}
-                        <span>Test Connection</span>
+                        <span>Test</span>
                     </Button>
-                    <Button variant="secondary" onClick={() => handleSubmit(true)} title="Save and immediately connect to this account">Save & Open</Button>
-                    <Button onClick={() => handleSubmit(false)}>{initialData ? 'Update Account' : 'Save Account'}</Button>
+                    <Button variant="secondary" onClick={() => handleSubmit(true)} title="Save and connect">Save & Open</Button>
+                    <Button onClick={() => handleSubmit(false)}>{initialData ? 'Update' : 'Save'}</Button>
                 </div>
              </div>
           </div>

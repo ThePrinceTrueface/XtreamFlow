@@ -32,7 +32,12 @@ interface SpeedTestMetrics {
     error?: string;
 }
 
-export const AccountDetailView: React.FC<{ onBack: () => void; onPlayDownload?: (url: string, title: string, type: 'vod' | 'series') => void; onOpenSearch?: () => void; }> = ({ onBack, onPlayDownload, onOpenSearch }) => {
+export const AccountDetailView: React.FC<{ 
+  onBack: () => void; 
+  onPlayDownload?: (url: string, title: string, type: 'vod' | 'series') => void; 
+  onOpenSearch?: () => void;
+  isMobileMenuOpen?: boolean;
+}> = ({ onBack, onPlayDownload, onOpenSearch, isMobileMenuOpen }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const { accountId } = useParams<{ accountId: string }>();
@@ -658,6 +663,7 @@ export const AccountDetailView: React.FC<{ onBack: () => void; onPlayDownload?: 
         isCollapsed={isSidebarCollapsed}
         onToggle={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
         onOpenSearch={onOpenSearch}
+        isMobileMenuOpen={isMobileMenuOpen}
       />
       
       {/* Main Content Area */}

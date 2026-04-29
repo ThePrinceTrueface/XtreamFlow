@@ -23,20 +23,29 @@ import { VideoPlayer } from './components/VideoPlayer';
 import { GlobalSearch } from './components/GlobalSearch';
 import { ShortcutsModal } from './components/ShortcutsModal';
 
-// --- Custom Title Bar Component ---
-const TitleBar: React.FC = () => {
+// --- Custom TitleBar Component ---
+const TitleBar: React.FC<{
+  onToggleMobileMenu: () => void;
+  isMobileMenuOpen: boolean;
+}> = ({ onToggleMobileMenu, isMobileMenuOpen }) => {
   return (
     <div className="h-[36px] w-full flex items-center justify-between select-none drag-region bg-transparent z-50 shrink-0">
-      {/* App Icon/Name */}
+      {/* App Icon/Name & Mobile Menu Toggle */}
       <div className="flex items-center gap-3 px-4">
+        <button 
+          className="md:hidden p-1 no-drag rounded hover:bg-white/10 transition-colors"
+          onClick={onToggleMobileMenu}
+        >
+          {isMobileMenuOpen ? <X size={18} /> : <div className="space-y-1"><div className="w-4 h-0.5 bg-white"/><div className="w-4 h-0.5 bg-white"/><div className="w-4 h-0.5 bg-white"/></div>}
+        </button>
         <div className="w-4 h-4 rounded-sm bg-fluent-accent/80 flex items-center justify-center shadow-sm">
              <div className="w-2 h-2 bg-white rounded-full opacity-80" />
         </div>
         <span className="text-xs font-medium text-fluent-subtext tracking-wide">XtreamFlow</span>
       </div>
 
-      {/* Window Controls (Simulated) */}
-      <div className="flex h-full no-drag">
+      {/* Window Controls (Simulated, hidden on small screens) */}
+      <div className="hidden md:flex h-full no-drag">
         <button className="w-[46px] h-full flex items-center justify-center hover:bg-white/5 text-white transition-colors">
           <Minus size={14} />
         </button>
@@ -433,7 +442,14 @@ export default function App() {
     );
   };
 
-  // Helper to determine active view for Sidebar
+  // Main App Shell
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  useEffect(() => {
+    // Close mobile menu on route change
+    setIsMobileMenuOpen(false);
+  }, [location.pathname]);
+
   const getActiveViewForSidebar = () => {
     const path = location.pathname;
     if (path === '/' || path === '/dashboard') return 'dashboard';
@@ -453,16 +469,29 @@ export default function App() {
   return (
     <AcrylicPanel>
       {/* Window Title Bar */}
-      <TitleBar />
+      <TitleBar 
+        isMobileMenuOpen={isMobileMenuOpen} 
+        onToggleMobileMenu={() => setIsMobileMenuOpen(!isMobileMenuOpen)} 
+      />
 
       <div className="flex flex-1 overflow-hidden relative">
         <Routes>
           <Route path="/account/:accountId/*" element={
-            <AccountDetailView 
-              onBack={() => navigate('/manage-accounts')} 
-              onPlayDownload={(url, title, type) => setPlayingDownload({ url, title, type })}
-              onOpenSearch={() => setIsGlobalSearchOpen(true)}
-            />
+            <div className="flex flex-1 relative w-full">
+              <AccountDetailView 
+                onBack={() => navigate('/manage-accounts')} 
+                onPlayDownload={(url, title, type) => setPlayingDownload({ url, title, type })}
+                onOpenSearch={() => setIsGlobalSearchOpen(true)}
+                isMobileMenuOpen={isMobileMenuOpen}
+              />
+              {/* Overlay for mobile menu in account view */}
+              {isMobileMenuOpen && (
+                <div 
+                  className="fixed inset-0 bg-black/50 backdrop-blur-sm z-30 md:hidden"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                />
+              )}
+            </div>
           } />
           <Route path="*" element={
             <>
@@ -471,7 +500,16 @@ export default function App() {
                 setView={(view) => navigate(`/${view}`)} 
                 isCollapsed={isSidebarCollapsed}
                 onToggle={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+                isMobileMenuOpen={isMobileMenuOpen}
               />
+              
+              {/* Overlay for mobile menu */}
+              {isMobileMenuOpen && (
+                <div 
+                  className="fixed inset-0 bg-black/50 backdrop-blur-sm z-30 md:hidden"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                />
+              )}
               
               <main className={`flex-1 overflow-y-auto relative scroll-smooth bg-transparent transition-all duration-300 ${location.pathname === '/downloads' ? 'p-0' : 'p-6 md:p-8'}`}>
                 <Routes>
