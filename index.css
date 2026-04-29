@@ -1,14 +1,17 @@
 @import "tailwindcss";
 
 @theme {
-  --color-fluent-mica: #202020;
-  --color-fluent-mica-alt: #1a1a1a;
-  --color-fluent-layer: #2c2c2c;
-  --color-fluent-layer-hover: #353535;
-  --color-fluent-border: rgba(255, 255, 255, 0.06);
-  --color-fluent-border-active: rgba(255, 255, 255, 0.1);
-  --color-fluent-text: #ffffff;
-  --color-fluent-subtext: rgba(255, 255, 255, 0.7);
+  --color-white: var(--theme-white);
+  --color-black: var(--theme-black);
+  
+  --color-fluent-mica: var(--theme-fluent-mica);
+  --color-fluent-mica-alt: var(--theme-fluent-mica-alt);
+  --color-fluent-layer: var(--theme-fluent-layer);
+  --color-fluent-layer-hover: var(--theme-fluent-layer-hover);
+  --color-fluent-border: var(--theme-fluent-border);
+  --color-fluent-border-active: var(--theme-fluent-border-active);
+  --color-fluent-text: var(--theme-fluent-text);
+  --color-fluent-subtext: var(--theme-fluent-subtext);
   --color-fluent-accent: var(--fluent-accent);
   --color-fluent-accent-hover: var(--fluent-accent-hover);
   --color-fluent-orange: #FF8C00;
@@ -16,10 +19,10 @@
   --color-fluent-danger: #FF4D4F;
 
   --color-win-primary: var(--fluent-accent);
-  --color-win-subtext: rgba(255, 255, 255, 0.6);
-  --color-win-card: rgba(255, 255, 255, 0.04);
-  --color-win-card-hover: rgba(255, 255, 255, 0.08);
-  --color-win-border: rgba(255, 255, 255, 0.1);
+  --color-win-subtext: var(--theme-win-subtext);
+  --color-win-card: var(--theme-win-card);
+  --color-win-card-hover: var(--theme-win-card-hover);
+  --color-win-border: var(--theme-win-border);
 
   --shadow-flyout: 0 8px 16px rgba(0, 0, 0, 0.35), 0 0 2px rgba(0,0,0,0.2);
   --shadow-window: 0 0 20px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255,255,255,0.08);
@@ -29,9 +32,55 @@
 }
 
 @layer base {
-  :root {
+  :root, html.dark {
     --fluent-accent: #FF0080;
     --fluent-accent-hover: #FF1A8C;
+
+    --theme-white: #ffffff;
+    --theme-black: #000000;
+    
+    --theme-fluent-mica: #202020;
+    --theme-fluent-mica-alt: #1a1a1a;
+    --theme-fluent-layer: #2c2c2c;
+    --theme-fluent-layer-hover: #353535;
+    --theme-fluent-border: rgba(255, 255, 255, 0.06);
+    --theme-fluent-border-active: rgba(255, 255, 255, 0.1);
+    --theme-fluent-text: #ffffff;
+    --theme-fluent-subtext: rgba(255, 255, 255, 0.7);
+
+    --theme-win-subtext: rgba(255, 255, 255, 0.6);
+    --theme-win-card: rgba(255, 255, 255, 0.04);
+    --theme-win-card-hover: rgba(255, 255, 255, 0.08);
+    --theme-win-border: rgba(255, 255, 255, 0.1);
+    
+    --theme-scrollbar-thumb: rgba(255, 255, 255, 0.3);
+    --theme-scrollbar-thumb-hover: rgba(255, 255, 255, 0.5);
+  }
+
+  html.light {
+    --theme-white: #1a1a1a;
+    --theme-black: #ffffff;
+    
+    --theme-fluent-mica: #f8f8f8;
+    --theme-fluent-mica-alt: #ffffff;
+    --theme-fluent-layer: #ffffff;
+    --theme-fluent-layer-hover: #f0f0f0;
+    --theme-fluent-border: rgba(0, 0, 0, 0.1);
+    --theme-fluent-border-active: rgba(0, 0, 0, 0.2);
+    --theme-fluent-text: #1a1a1a;
+    --theme-fluent-subtext: rgba(0, 0, 0, 0.6);
+
+    --theme-win-subtext: rgba(0, 0, 0, 0.6);
+    --theme-win-card: rgba(0, 0, 0, 0.04);
+    --theme-win-card-hover: rgba(0, 0, 0, 0.08);
+    --theme-win-border: rgba(0, 0, 0, 0.1);
+    
+    --theme-scrollbar-thumb: rgba(0, 0, 0, 0.3);
+    --theme-scrollbar-thumb-hover: rgba(0, 0, 0, 0.5);
+  }
+
+  html.light body {
+    background-image: url('https://images.unsplash.com/photo-1618005198913-c361952a7eb5?q=80&w=2564&auto=format&fit=crop'); /* Added a lighter variant of the wallpaper or standard abstract light */
   }
 
   body {
@@ -53,13 +102,13 @@
     background: transparent;
   }
   ::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.3);
+    background: var(--theme-scrollbar-thumb);
     border-radius: 5px;
     border: 3px solid transparent;
     background-clip: content-box;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: rgba(255, 255, 255, 0.5);
+    background: var(--theme-scrollbar-thumb-hover);
     border: 3px solid transparent;
     background-clip: content-box;
   }

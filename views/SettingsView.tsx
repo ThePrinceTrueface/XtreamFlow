@@ -28,8 +28,10 @@ export const SettingsView: React.FC<{
   onExport: () => void;
   accentColor: string;
   onAccentColorChange: (color: string) => void;
+  themeMode: 'dark' | 'light';
+  setThemeMode: (mode: 'dark' | 'light') => void;
   onOpenShortcuts: () => void;
-}> = ({ accounts, onImport, onExport, accentColor, onAccentColorChange, onOpenShortcuts }) => {
+}> = ({ accounts, onImport, onExport, accentColor, onAccentColorChange, themeMode, setThemeMode, onOpenShortcuts }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const workerRef = useRef<Worker | null>(null);
@@ -114,7 +116,7 @@ export const SettingsView: React.FC<{
              <div className="flex-1 min-w-0">
                 <h3 className="text-lg font-medium mb-1">Appearance</h3>
                 <p className="text-fluent-subtext text-sm mb-4">
-                  Choose your application accent color.
+                  Choose your application accent color and theme mode.
                 </p>
                 <div className="flex gap-3 overflow-x-auto py-2 px-1 pb-4 snap-x scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent">
                   {ACCENT_COLORS.map((color) => (
@@ -128,6 +130,28 @@ export const SettingsView: React.FC<{
                       title={color.name}
                     />
                   ))}
+                </div>
+                
+                <div className="mt-4 border-t border-white/5 pt-4">
+                  <label className="text-sm font-medium text-win-subtext">Thème de l'application</label>
+                  <div className="flex items-center gap-3 mt-2">
+                    <button
+                      onClick={() => setThemeMode(themeMode === 'dark' ? 'light' : 'dark')}
+                      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full transition-colors focus:outline-none ring-1 ring-white/10 ${
+                         themeMode === 'light' ? 'bg-fluent-accent' : 'bg-white/10'
+                      }`}
+                    >
+                      <span className="sr-only">Toggle Theme</span>
+                      <span
+                        className={`pointer-events-none absolute left-0 inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-1 ring-black/5 transition duration-200 ease-in-out ${
+                          themeMode === 'light' ? 'translate-x-4' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                    <span className="text-sm text-white/70">
+                      {themeMode === 'light' ? 'Mode Clair' : 'Mode Sombre'}
+                    </span>
+                  </div>
                 </div>
              </div>
           </div>

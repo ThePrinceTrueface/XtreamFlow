@@ -82,6 +82,10 @@ export default function App() {
     return localStorage.getItem('xtream_accent_color') || '#FF0080';
   });
 
+  const [themeMode, setThemeMode] = useState<'dark' | 'light'>(() => {
+    return (localStorage.getItem('xtream_theme_mode') as 'dark' | 'light') || 'dark';
+  });
+
   useEffect(() => {
     const root = document.documentElement;
     root.style.setProperty('--fluent-accent', accentColor);
@@ -89,6 +93,17 @@ export default function App() {
     root.style.setProperty('--fluent-accent-hover', accentColor + 'CC');
     localStorage.setItem('xtream_accent_color', accentColor);
   }, [accentColor]);
+
+  useEffect(() => {
+    localStorage.setItem('xtream_theme_mode', themeMode);
+    if (themeMode === 'light') {
+      document.documentElement.classList.add('light');
+      document.documentElement.classList.remove('dark');
+    } else {
+      document.documentElement.classList.add('dark');
+      document.documentElement.classList.remove('light');
+    }
+  }, [themeMode]);
   
   // Modal State
   const [modal, setModal] = useState<ModalConfig>({
@@ -566,6 +581,8 @@ export default function App() {
                         onExport={handleExportData}
                         accentColor={accentColor}
                         onAccentColorChange={setAccentColor}
+                        themeMode={themeMode}
+                        setThemeMode={setThemeMode}
                         onOpenShortcuts={() => setIsShortcutsModalOpen(true)}
                     />
                   } />
