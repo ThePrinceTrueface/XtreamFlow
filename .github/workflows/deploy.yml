@@ -39,4 +39,4 @@ jobs:
         login: ${{ secrets.SURGE_LOGIN }}
         token: ${{ secrets.SURGE_TOKEN }}
         project: dist              # ou build, selon ton output
-        domain: xtreamflow.surge.sh
+        domain: xflow.surge.sh
