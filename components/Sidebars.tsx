@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { 
   Tv, 
   Plus, 
@@ -56,13 +57,14 @@ interface SidebarProps {
 
 export const Sidebar: React.FC<SidebarProps> = ({ activeView, setView, isCollapsed, onToggle, onOpenSearch, isMobileMenuOpen }) => {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const navItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'add-account', label: 'Add Account', icon: Plus },
-    { id: 'manage-accounts', label: 'Manage Accounts', icon: Database },
-    { id: 'server-library', label: 'Server Library', icon: Server },
-    { id: 'downloads', label: 'Downloads', icon: Download },
-    { id: 'settings', label: 'Settings', icon: SettingsIcon },
+    { id: 'dashboard', label: t('sidebar.home'), icon: LayoutDashboard },
+    { id: 'add-account', label: t('sidebar.addAccount'), icon: Plus },
+    { id: 'manage-accounts', label: t('sidebar.manageAccounts'), icon: Database },
+    { id: 'server-library', label: t('sidebar.serverLibrary'), icon: Server },
+    { id: 'downloads', label: t('sidebar.downloads'), icon: Download },
+    { id: 'settings', label: t('sidebar.settings'), icon: SettingsIcon },
   ];
 
   return (
@@ -84,7 +86,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeView, setView, isCollaps
         <button 
           onClick={onToggle}
           className="p-2 rounded-control text-fluent-subtext hover:bg-white/5 hover:text-white transition-colors"
-          title={isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+          title={isCollapsed ? t('sidebar.expand') : t('sidebar.collapse')}
         >
           {isCollapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
         </button>
@@ -100,7 +102,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeView, setView, isCollaps
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
             {!isCollapsed && (
               <div className="flex items-center justify-between flex-1">
-                <span>Recherche</span>
+                <span>{t('common.search')}</span>
                 <span className="text-[10px] bg-black/30 px-1.5 py-0.5 rounded border border-white/10">Ctrl+K</span>
               </div>
             )}
@@ -148,13 +150,14 @@ interface AccountSidebarProps {
 }
 
 export const AccountSidebar: React.FC<AccountSidebarProps> = ({ activeTab, setTab, onBack, accountName, isCollapsed, onToggle, onOpenSearch, isMobileMenuOpen }) => {
+  const { t } = useTranslation();
   const navItems = [
-    { id: 'info', label: 'Information', icon: InfoIcon },
-    { id: 'live', label: 'Live TV', icon: Tv },
-    { id: 'vod', label: 'Movies', icon: Film },
-    { id: 'series', label: 'Series', icon: Clapperboard },
-    { id: 'downloads', label: 'Downloads', icon: Download },
-    { id: 'tools', label: 'Tools', icon: Wrench },
+    { id: 'info', label: t('sidebar.information'), icon: InfoIcon },
+    { id: 'live', label: t('sidebar.liveTv'), icon: Tv },
+    { id: 'vod', label: t('sidebar.movies'), icon: Film },
+    { id: 'series', label: t('sidebar.series'), icon: Clapperboard },
+    { id: 'downloads', label: t('sidebar.downloads'), icon: Download },
+    { id: 'tools', label: t('sidebar.tools'), icon: Wrench },
   ];
 
   return (
@@ -171,13 +174,13 @@ export const AccountSidebar: React.FC<AccountSidebarProps> = ({ activeTab, setTa
                  onClick={onBack} 
                  className="flex items-center gap-2 text-[11px] font-bold text-fluent-accent uppercase tracking-widest hover:text-white transition-colors"
                >
-                  <ChevronLeft size={14} /> Back
+                  <ChevronLeft size={14} /> {t('common.back')}
                </button>
             )}
             <button 
               onClick={onToggle}
               className="p-2 rounded-control text-fluent-subtext hover:bg-white/5 hover:text-white transition-colors"
-              title={isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+              title={isCollapsed ? t('sidebar.expand') : t('sidebar.collapse')}
             >
               {isCollapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
             </button>
@@ -196,7 +199,7 @@ export const AccountSidebar: React.FC<AccountSidebarProps> = ({ activeTab, setTa
          {isCollapsed && (
             <button 
               onClick={onBack}
-              title="Back to Dashboard"
+              title={t('common.back')}
               className="p-2 mb-4 rounded-control text-fluent-accent hover:bg-white/5 hover:text-white transition-colors"
             >
               <ChevronLeft size={18} />
@@ -214,7 +217,7 @@ export const AccountSidebar: React.FC<AccountSidebarProps> = ({ activeTab, setTa
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
             {!isCollapsed && (
               <div className="flex items-center justify-between flex-1">
-                <span>Recherche</span>
+                <span>{t('common.search')}</span>
                 <span className="text-[10px] bg-black/30 px-1.5 py-0.5 rounded border border-white/10">Ctrl+K</span>
               </div>
             )}

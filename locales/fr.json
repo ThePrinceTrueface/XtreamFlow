@@ -1,0 +1,107 @@
+{
+  "settings": {
+    "title": "Paramètres",
+    "appearance": {
+      "title": "Apparence",
+      "desc": "Choisissez la couleur d'accentuation et le mode de thème de votre application.",
+      "themeLabel": "Thème de l'application",
+      "lightMode": "Mode Clair",
+      "darkMode": "Mode Sombre",
+      "toggleTheme": "Changer de thème"
+    },
+    "data": {
+      "title": "Gestion des données",
+      "desc": "Sauvegardez vos comptes connectés et votre bibliothèque de serveurs dans un fichier JSON, ou restaurez-les.",
+      "export": "Exporter une sauvegarde complète",
+      "import": "Importer une sauvegarde",
+      "processing": "Traitement en cours...",
+      "failed": "Échec de l'import : ",
+      "invalidJson": "Le fichier sélectionné n'est pas un fichier JSON valide.",
+      "readError": "Erreur lors de la lecture du fichier."
+    },
+    "preferences": {
+      "title": "Préférences",
+      "desc": "Configurez les paramètres par défaut du lecteur.",
+      "audioLang": "Langue audio préférée",
+      "liveFormat": "Format des flux Live",
+      "autoplayNav": "Lecture Automatique (Navigation)",
+      "autoplayNavDesc": "Lance la vidéo automatiquement lors de l'ouverture de la page détail d'un contenu depuis la grille.",
+      "autoplaySeries": "Lecture Automatique (Séries)",
+      "enabled": "Activé",
+      "disabled": "Désactivé"
+    },
+    "app": {
+      "title": "Application",
+      "poweredBy": "Propulsé par",
+      "createdBy": "créé par le"
+    },
+    "accessibility": {
+      "title": "Accessibilité",
+      "desc": "Consultez la liste des raccourcis clavier disponibles pour naviguer plus rapidement.",
+      "showShortcuts": "Voir les raccourcis"
+    },
+    "language": {
+      "label": "Langue de l'interface",
+      "desc": "Choisissez votre langue d'affichage préférée."
+    }
+  },
+  "common": {
+    "back": "Retour",
+    "cancel": "Annuler",
+    "save": "Enregistrer",
+    "update": "Mettre à jour",
+    "edit": "Modifier",
+    "delete": "Supprimer",
+    "test": "Tester",
+    "testConnection": "Tester la connexion",
+    "saveOpen": "Enregistrer & Ouvrir",
+    "ok": "OK",
+    "close": "Fermer",
+    "loading": "Chargement...",
+    "none": "Aucun",
+    "search": "Rechercher",
+    "add": "Ajouter"
+  },
+  "sidebar": {
+    "home": "Accueil",
+    "addAccount": "Ajouter un compte",
+    "manageAccounts": "Gérer les comptes",
+    "serverLibrary": "Bibliothèque Serveur",
+    "downloads": "Téléchargements",
+    "settings": "Paramètres",
+    "information": "Informations",
+    "liveTv": "TV en direct",
+    "movies": "Films",
+    "series": "Séries",
+    "tools": "Outils",
+    "shortcuts": "Raccourcis",
+    "collapse": "Réduire le menu",
+    "expand": "Agrandir le menu"
+  },
+  "addAccount": {
+    "title": "Connecter un compte Xtream",
+    "editTitle": "Modifier le compte",
+    "urlTab": "Lien M3U / API",
+    "manualTab": "Saisie Manuelle",
+    "m3uPlaceholder": "Collez votre lien M3U complet ici ou l'URL de l'API",
+    "accountName": "Nom du compte (ex: Mon IPTV)",
+    "username": "Nom d'utilisateur",
+    "password": "Mot de passe",
+    "host": "Hôte / Domaine",
+    "port": "Port",
+    "protocol": "Protocole",
+    "tagsPlaceholder": "Appuyez sur Entrée pour ajouter un mot-clé",
+    "tagsLabel": "Mots-clés (tags)"
+  },
+  "dashboard": {
+    "welcome": "Bonjour !",
+    "recent": "Récemment lus",
+    "live": "En direct",
+    "movies": "Films",
+    "series": "Séries",
+    "favorites": "Favoris",
+    "addAccountPrompt": "Aucun compte configuré. Ajoutez un compte pour commencer.",
+    "poweredBy": "Propulsé par",
+    "createdBy": "Créé par le"
+  }
+}

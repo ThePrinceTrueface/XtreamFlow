@@ -1,0 +1,107 @@
+{
+  "settings": {
+    "title": "Settings",
+    "appearance": {
+      "title": "Appearance",
+      "desc": "Choose your application accent color and theme mode.",
+      "themeLabel": "Application Theme",
+      "lightMode": "Light Mode",
+      "darkMode": "Dark Mode",
+      "toggleTheme": "Toggle Theme"
+    },
+    "data": {
+      "title": "Data Management",
+      "desc": "Backup your connected accounts and server library to a JSON file, or restore them.",
+      "export": "Export Full Backup",
+      "import": "Import Backup",
+      "processing": "Processing...",
+      "failed": "Import Failed: ",
+      "invalidJson": "The selected file is not a valid JSON file.",
+      "readError": "Error reading file."
+    },
+    "preferences": {
+      "title": "Preferences",
+      "desc": "Configure your default player settings.",
+      "audioLang": "Preferred Audio Language",
+      "liveFormat": "Live Stream Format",
+      "autoplayNav": "Auto-Play (Navigation)",
+      "autoplayNavDesc": "Plays video automatically when opening detail pages from the grid.",
+      "autoplaySeries": "Auto-Play (Series)",
+      "enabled": "Enabled",
+      "disabled": "Disabled"
+    },
+    "app": {
+      "title": "Application",
+      "poweredBy": "Powered by",
+      "createdBy": "created by"
+    },
+    "accessibility": {
+      "title": "Accessibility",
+      "desc": "View the list of keyboard shortcuts available for quicker navigation.",
+      "showShortcuts": "Show Shortcuts"
+    },
+    "language": {
+      "label": "Interface Language",
+      "desc": "Choose your preferred display language."
+    }
+  },
+  "common": {
+    "back": "Back",
+    "cancel": "Cancel",
+    "save": "Save",
+    "update": "Update",
+    "edit": "Edit",
+    "delete": "Delete",
+    "test": "Test",
+    "testConnection": "Test Connection",
+    "saveOpen": "Save & Open",
+    "ok": "OK",
+    "close": "Close",
+    "loading": "Loading...",
+    "none": "None",
+    "search": "Search",
+    "add": "Add"
+  },
+  "sidebar": {
+    "home": "Home",
+    "addAccount": "Add Account",
+    "manageAccounts": "Manage Accounts",
+    "serverLibrary": "Server Library",
+    "downloads": "Downloads",
+    "settings": "Settings",
+    "information": "Information",
+    "liveTv": "Live TV",
+    "movies": "Movies",
+    "series": "Series",
+    "tools": "Tools",
+    "shortcuts": "Shortcuts",
+    "collapse": "Collapse sidebar",
+    "expand": "Expand sidebar"
+  },
+  "addAccount": {
+    "title": "Connect an Xtream Account",
+    "editTitle": "Edit Account",
+    "urlTab": "M3U Link / API",
+    "manualTab": "Manual Entry",
+    "m3uPlaceholder": "Paste your full M3U stream link or API URL here",
+    "accountName": "Account Name (e.g. My IPTV)",
+    "username": "Username",
+    "password": "Password",
+    "host": "Host / Domain",
+    "port": "Port",
+    "protocol": "Protocol",
+    "tagsPlaceholder": "Press Enter to add tag",
+    "tagsLabel": "Tags"
+  },
+  "dashboard": {
+    "welcome": "Hello!",
+    "recent": "Recently played",
+    "live": "Live TV",
+    "movies": "Movies",
+    "series": "Series",
+    "favorites": "Favorites",
+    "addAccountPrompt": "No accounts configured. Add an account to get started.",
+    "poweredBy": "Powered by",
+    "createdBy": "Created by"
+  }
+}
