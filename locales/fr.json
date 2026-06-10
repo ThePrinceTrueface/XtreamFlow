@@ -103,5 +103,10 @@
     "addAccountPrompt": "Aucun compte configuré. Ajoutez un compte pour commencer.",
     "poweredBy": "Propulsé par",
     "createdBy": "Créé par le"
+  },
+  "player": {
+    "lock": "Verrouiller",
+    "lockDesc": "Verrouiller les contrôles (Ne pas déranger)",
+    "lockedPill": "Écran verrouillé (Cliquer pour déverrouiller)"
   }
 }

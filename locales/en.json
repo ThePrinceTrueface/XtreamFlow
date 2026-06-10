@@ -103,5 +103,10 @@
     "addAccountPrompt": "No accounts configured. Add an account to get started.",
     "poweredBy": "Powered by",
     "createdBy": "Created by"
+  },
+  "player": {
+    "lock": "Lock",
+    "lockDesc": "Lock controls (Do Not Disturb)",
+    "lockedPill": "Screen Locked (Click to unlock)"
   }
 }

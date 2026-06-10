@@ -5,8 +5,9 @@ import {
   SkipBack, SkipForward, Settings, List, ListVideo, ChevronLeft, ChevronRight, Square,
   Expand, Shrink, RefreshCw, Clock, Info, Columns, AudioLines, Captions,
   ChevronUp, ChevronDown, Search, MonitorPlay, Tv, PictureInPicture,
-  RotateCcw, RotateCw, Film, Link, Check
+  RotateCcw, RotateCw, Film, Link, Check, Lock, Unlock
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import shaka from 'shaka-player';
 import Hls from 'hls.js';
 import mpegts from 'mpegts.js';
@@ -42,10 +43,12 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     url, title, type, onClose, playlist, currentItem, onChannelSelect,
     isEmbedded = false, isMini = false, onToggleEmbed, onMaximize, onFullWindow, onRestore, account
 }) => {
+  const { t } = useTranslation();
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const retryTimeoutRef = useRef<number | null>(null);
   const epgIntervalRef = useRef<number | null>(null);
+  const lockTimeoutRef = useRef<number | null>(null);
   
   // Hook for Preferences
   const { updateProgress, getProgress, getPlayerSettings, updatePlayerSettings } = useUserPreferences(account?.id || 'guest');
@@ -61,6 +64,8 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const [duration, setDuration] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showControls, setShowControls] = useState(true);
+  const [isLocked, setIsLocked] = useState(false);
+  const [showLockIndicator, setShowLockIndicator] = useState(false);
   const [showAdvancedControls, setShowAdvancedControls] = useState(false);
   const [activeMenu, setActiveMenu] = useState<'none' | 'channels' | 'audio' | 'subtitles' | 'settings'>('none');
   const [currentTimeString, setCurrentTimeString] = useState('');
@@ -678,15 +683,65 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   }, [url, activeUrl, retryCount, playerSettings.bufferSize]); 
 
   // Handle Controls Visibility
+  const resetControlsTimeout = useCallback(() => {
+    if (controlsTimeoutRef.current) {
+      window.clearTimeout(controlsTimeoutRef.current);
+      controlsTimeoutRef.current = null;
+    }
+    
+    if (activeMenu !== 'none' || !isPlaying || isLoading || isLocked) {
+      return;
+    }
+
+    controlsTimeoutRef.current = window.setTimeout(() => {
+      setShowControls(false);
+    }, 2500); // Cache après 2.5 secondes réelles d'inactivité
+  }, [activeMenu, isPlaying, isLoading, isLocked]);
+
+  const resetLockTimeout = useCallback(() => {
+    if (lockTimeoutRef.current) {
+      window.clearTimeout(lockTimeoutRef.current);
+      lockTimeoutRef.current = null;
+    }
+
+    lockTimeoutRef.current = window.setTimeout(() => {
+      setShowLockIndicator(false);
+    }, 2500); // Cache le cadenas après 2.5 secondes d'inactivité
+  }, []);
+
   const handleMouseMove = () => {
+    if (isLocked) {
+      setShowLockIndicator(true);
+      resetLockTimeout();
+      return;
+    }
     setShowControls(true);
-    if (controlsTimeoutRef.current) window.clearTimeout(controlsTimeoutRef.current);
-    if (activeMenu === 'none') {
-        controlsTimeoutRef.current = window.setTimeout(() => {
-            if (isPlaying && !isLoading) setShowControls(false);
-        }, 3000);
+    resetControlsTimeout();
+  };
+
+  const handleMouseLeave = () => {
+    if (isLocked) {
+      setShowLockIndicator(false);
+      return;
+    }
+    if (activeMenu === 'none' && isPlaying && !isLoading) {
+      setShowControls(false);
     }
   };
+
+  useEffect(() => {
+    if (showControls) {
+      resetControlsTimeout();
+    }
+    return () => {
+      if (controlsTimeoutRef.current) {
+        window.clearTimeout(controlsTimeoutRef.current);
+      }
+      if (lockTimeoutRef.current) {
+        window.clearTimeout(lockTimeoutRef.current);
+      }
+    };
+  }, [showControls, activeMenu, isPlaying, isLoading, resetControlsTimeout]);
 
   // Actions
   const togglePlay = () => {
@@ -856,16 +911,35 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isPlaying, isMuted, isFullscreen, type, playlist, currentItem, changeChannel, volume, onClose]);
 
-  const rootClasses = isEmbedded 
+  const rootClasses = `${isEmbedded 
     ? "absolute inset-0 z-50 bg-black flex flex-col items-center justify-center animate-in fade-in duration-300 overflow-hidden"
-    : "fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center animate-in fade-in duration-300 overflow-hidden";
+    : "fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center animate-in fade-in duration-300 overflow-hidden"} ${((!showControls && !showLockIndicator) && isPlaying) ? 'cursor-none' : ''}`;
 
   return (
     <div 
       ref={containerRef}
       onMouseMove={handleMouseMove}
+      onMouseLeave={handleMouseLeave}
       className={rootClasses}
     >
+        {/* Floating Lock Indicator (Do Not Disturb Mode) */}
+        {isLocked && (
+            <div className={`absolute top-6 left-6 z-50 transition-all duration-300 ${showLockIndicator ? 'opacity-100 scale-100 translate-y-0' : 'opacity-0 scale-95 -translate-y-2 pointer-events-none'}`}>
+                <button
+                    onClick={() => {
+                        setIsLocked(false);
+                        setShowControls(true);
+                        setShowLockIndicator(false);
+                    }}
+                    className="flex items-center gap-2 px-4 py-2 bg-black/80 backdrop-blur-md border border-white/10 text-white/90 text-xs font-medium rounded-full shadow-2xl transition-all hover:scale-105 active:scale-95 duration-200"
+                    title="Déverrouiller les contrôles"
+                >
+                    <Lock size={16} className="text-fluent-accent animate-pulse" />
+                    <span>{t('player.lockedPill')}</span>
+                </button>
+            </div>
+        )}
+
         {/* Resume Toast */}
         {resumePoint && !hasResumed && isLoading && (
              <div className="absolute top-20 left-1/2 -translate-x-1/2 bg-fluent-accent/90 text-black px-4 py-2 rounded-full z-50 shadow-lg font-medium animate-in slide-in-from-top-4 fade-in">
@@ -968,7 +1042,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
         {/* Top Bar (Title & Close) */}
         {!isMini && (
-            <div className={`absolute top-0 left-0 right-0 p-6 flex justify-between items-start z-40 bg-gradient-to-b from-black/80 to-transparent transition-opacity duration-300 ${showControls ? 'opacity-100' : 'opacity-0'}`}>
+            <div className={`absolute top-0 left-0 right-0 p-6 flex justify-between items-start z-40 bg-gradient-to-b from-black/80 to-transparent transition-opacity duration-300 ${showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
                 <div className="text-white font-medium text-lg drop-shadow-md">
                     {type === 'live' ? 'LIVE TV' : 'VOD'} | {decodeBase64(title)}
                 </div>
@@ -990,7 +1064,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
         {/* Mini Top Bar (Close only) */}
         {isMini && (
-            <div className={`absolute top-0 right-0 p-2 z-30 transition-opacity duration-300 ${showControls ? 'opacity-100' : 'opacity-0'}`}>
+            <div className={`absolute top-0 right-0 p-2 z-30 transition-opacity duration-300 ${showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
                 <button onClick={onClose} className="text-white/80 hover:text-white p-1.5 rounded-full hover:bg-white/20 transition-colors bg-black/40 backdrop-blur-sm">
                     <X size={18} />
                 </button>
@@ -1223,6 +1297,19 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
                 {/* Right Controls (Volume & Stop) */}
                 <div className="flex items-center justify-end gap-6 mt-2">
+                    <button 
+                        onClick={() => {
+                            setIsLocked(true);
+                            setShowControls(false);
+                            setShowLockIndicator(true);
+                            resetLockTimeout();
+                        }} 
+                        className="flex flex-col items-center gap-1.5 transition-colors text-white/70 hover:text-white" 
+                        title={t('player.lockDesc')}
+                    >
+                        <Unlock size={20} />
+                        <span className="text-[10px] font-medium">{t('player.lock')}</span>
+                    </button>
                     <button onClick={handleStop} className="flex flex-col items-center gap-1.5 transition-colors text-white/70 hover:text-white" title="Arrêter">
                         <Square size={20} fill="currentColor" />
                         <span className="text-[10px] font-medium">Arrêter</span>
