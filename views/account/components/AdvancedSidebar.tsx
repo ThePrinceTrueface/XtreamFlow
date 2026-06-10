@@ -7,9 +7,17 @@ interface AdvancedSidebarProps {
   categories: XtreamCategory[];
   selectedCategoryId: string | null;
   onSelectCategory: (cat: XtreamCategory | null | 'favorites') => void;
+  categoryCounts?: Record<string, number>;
+  favoritesCount?: number;
 }
 
-export const AdvancedSidebar: React.FC<AdvancedSidebarProps> = ({ categories, selectedCategoryId, onSelectCategory }) => {
+export const AdvancedSidebar: React.FC<AdvancedSidebarProps> = ({ 
+  categories, 
+  selectedCategoryId, 
+  onSelectCategory,
+  categoryCounts,
+  favoritesCount
+}) => {
   const [searchQuery, setSearchQuery] = useState('');
 
   const filteredCategories = useMemo(() => {
@@ -24,15 +32,22 @@ export const AdvancedSidebar: React.FC<AdvancedSidebarProps> = ({ categories, se
         <h3 className="text-[10px] font-bold text-fluent-accent uppercase tracking-widest mb-4 opacity-70">Navigation</h3>
         
         <button onClick={() => onSelectCategory(null)}
-          className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] transition-all group relative mb-1 ${selectedCategoryId === null ? 'bg-fluent-accent/10 text-fluent-accent font-semibold' : 'hover:bg-white/5 text-fluent-subtext'}`}>
-          {selectedCategoryId === null && <div className="absolute left-0 w-1 h-4 bg-fluent-accent rounded-r-full" />}
-          <Layers size={18} /> Tout le catalogue
+          className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-[13px] transition-all group relative mb-1 ${selectedCategoryId === null ? 'bg-fluent-accent/10 text-fluent-accent font-semibold' : 'hover:bg-white/5 text-fluent-subtext'}`}>
+          <div className="flex items-center gap-3 overflow-hidden">
+            {selectedCategoryId === null && <div className="absolute left-0 w-1 h-4 bg-fluent-accent rounded-r-full" />}
+            <Layers size={18} className="shrink-0" /> <span className="truncate">Tout le catalogue</span>
+          </div>
         </button>
 
         <button onClick={() => onSelectCategory('favorites')}
-          className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] transition-all group relative mb-2 ${selectedCategoryId === 'favorites' ? 'bg-yellow-500/10 text-yellow-500 font-semibold' : 'hover:bg-white/5 text-fluent-subtext'}`}>
-          {selectedCategoryId === 'favorites' && <div className="absolute left-0 w-1 h-4 bg-yellow-500 rounded-r-full" />}
-          <Star size={18} className={selectedCategoryId === 'favorites' ? 'text-yellow-500' : 'opacity-40 group-hover:opacity-100'} /> Favoris
+          className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-[13px] transition-all group relative mb-2 ${selectedCategoryId === 'favorites' ? 'bg-yellow-500/10 text-yellow-500 font-semibold' : 'hover:bg-white/5 text-fluent-subtext'}`}>
+          <div className="flex items-center gap-3 overflow-hidden">
+            {selectedCategoryId === 'favorites' && <div className="absolute left-0 w-1 h-4 bg-yellow-500 rounded-r-full" />}
+            <Star size={18} className={`shrink-0 ${selectedCategoryId === 'favorites' ? 'text-yellow-500' : 'opacity-40 group-hover:opacity-100'}`} /> <span className="truncate">Favoris</span>
+          </div>
+          {favoritesCount !== undefined && favoritesCount > 0 && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-yellow-500/10 text-yellow-500 font-medium shrink-0">{favoritesCount}</span>
+          )}
         </button>
         
         <div className="h-[1px] bg-white/5 my-6 mx-2" />
@@ -46,7 +61,7 @@ export const AdvancedSidebar: React.FC<AdvancedSidebarProps> = ({ categories, se
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="Chercher une catégorie..."
-                    className="w-full bg-black/40 border border-white/10 rounded-lg pl-8 pr-3 py-1.5 text-[12px] text-white focus:border-fluent-accent outline-none"
+                    className="w-full bg-black/40 border border-white/10 rounded-lg pl-8 pr-3 py-1.5 text-[12px] text-white focus:border-fluent-accent outline-none animate-in fade-in duration-200"
                 />
                 <Search size={14} className="absolute left-2.5 top-2 text-white/40" />
             </div>
@@ -55,12 +70,18 @@ export const AdvancedSidebar: React.FC<AdvancedSidebarProps> = ({ categories, se
         <div className="space-y-1">
           {filteredCategories.map((cat, index) => {
             const isActive = selectedCategoryId === cat.category_id;
+            const count = categoryCounts ? (categoryCounts[cat.category_id] || 0) : 0;
             return (
               <button key={`${cat.category_id}-${index}`} onClick={() => onSelectCategory(cat)}
-                className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] transition-all group relative ${isActive ? 'bg-fluent-accent/10 text-fluent-accent font-semibold' : 'hover:bg-white/5 text-fluent-subtext'}`}>
-                {isActive && <div className="absolute left-0 w-1 h-4 bg-fluent-accent rounded-r-full" />}
-                <Folder size={18} className={isActive ? 'text-fluent-accent flex-shrink-0' : 'opacity-40 group-hover:opacity-100 flex-shrink-0'} />
-                <span className="truncate">{cat.category_name}</span>
+                className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-[13px] transition-all group relative ${isActive ? 'bg-fluent-accent/10 text-fluent-accent font-semibold' : 'hover:bg-white/5 text-fluent-subtext'}`}>
+                <div className="flex items-center gap-3 overflow-hidden">
+                  {isActive && <div className="absolute left-0 w-1 h-4 bg-fluent-accent rounded-r-full" />}
+                  <Folder size={18} className={`shrink-0 ${isActive ? 'text-fluent-accent' : 'opacity-40 group-hover:opacity-100'}`} />
+                  <span className="truncate">{cat.category_name}</span>
+                </div>
+                {count > 0 && (
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0 ${isActive ? 'bg-fluent-accent/25 text-fluent-accent' : 'bg-white/5 text-white/40 group-hover:bg-white/10 group-hover:text-white/60 transition-colors'}`}>{count}</span>
+                )}
               </button>
             );
           })}

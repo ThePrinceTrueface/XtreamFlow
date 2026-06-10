@@ -119,6 +119,18 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
     );
   }, [displayData, selectedCategory, searchQuery, getFavorites, type]);
 
+  // Memoized count of items in each category
+  const categoryCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    fullData.forEach(item => {
+        const catId = item.category_id;
+        if (catId) {
+            counts[catId] = (counts[catId] || 0) + 1;
+        }
+    });
+    return counts;
+  }, [fullData]);
+
   // MEMOIZED CONFIGURATION TO PREVENT INFINITE LOOPS
   const currentConfig = useMemo(() => {
     const config = {
@@ -825,9 +837,16 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
             <div className="flex items-center gap-4">
                 {(currentLevel !== 'categories' && uiMode === 'normal') && <Button variant="ghost" onClick={handleGoBack} className="!px-2 hover:bg-white/5"><ArrowLeft size={20} /></Button>}
                 <h2 className="text-xl font-semibold flex items-center gap-3">
-                    <currentConfig.icon size={24} className="text-fluent-accent" />
-                    <span>
-                        {uiMode === 'flow' ? currentConfig.label : (selectedCategory?.category_name || currentConfig.label)}
+                    <currentConfig.icon size={24} className="text-fluent-accent animate-in zoom-in-50 duration-300" />
+                    <span className="flex items-center gap-2">
+                        <span>
+                            {uiMode === 'flow' ? currentConfig.label : (selectedCategory?.category_name || currentConfig.label)}
+                        </span>
+                        {selectedCategory && (
+                            <span className="text-[11px] font-normal px-2.5 py-0.5 rounded-full bg-white/10 text-white/60 border border-white/5 animate-in fade-in zoom-in-95 duration-200">
+                                {displayData.length} {type === 'live' ? 'flux' : type === 'vod' ? 'films' : 'séries'}
+                            </span>
+                        )}
                     </span>
                 </h2>
             </div>
@@ -858,7 +877,13 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
             {uiMode === 'flow' ? (
                 <div className="flex h-full overflow-hidden">
                     {/* Pane 1: Categories */}
-                    <AdvancedSidebar categories={categories} selectedCategoryId={selectedCategory?.category_id || null} onSelectCategory={handleCategorySelect} />
+                    <AdvancedSidebar 
+                        categories={categories} 
+                        selectedCategoryId={selectedCategory?.category_id || null} 
+                        onSelectCategory={handleCategorySelect} 
+                        categoryCounts={categoryCounts}
+                        favoritesCount={getFavorites(type).length}
+                    />
                     
                     {/* Pane 2 & 3: Content or (Stream List + Player) */}
                     <div className="flex-1 flex overflow-hidden relative h-full">
@@ -1037,15 +1062,34 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
                                 className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 py-8"
                             >
                                 <div onClick={() => handleCategorySelect('favorites')}
-                                    className="bg-yellow-500/5 hover:bg-yellow-500/10 border border-yellow-500/20 p-5 rounded-window cursor-pointer transition-all flex items-center gap-4 group shadow-sm">
-                                    <Star className="text-yellow-500 group-hover:scale-110 transition-transform" /> <span className="font-bold text-sm text-yellow-500">Favoris</span>
-                                </div>
-                                {filteredCategories.map((cat, index) => (
-                                    <div key={`${cat.category_id}-${index}`} onClick={() => handleCategorySelect(cat)}
-                                        className="bg-fluent-layer hover:bg-fluent-layerHover border border-fluent-border p-5 rounded-window cursor-pointer transition-all flex items-center gap-4 group shadow-sm">
-                                        <Folder className="text-fluent-accent group-hover:scale-110 transition-transform" /> <span className="font-semibold text-sm">{cat.category_name}</span>
+                                    className="bg-yellow-500/5 hover:bg-yellow-500/10 border border-yellow-500/20 p-5 rounded-window cursor-pointer transition-all flex items-center justify-between group shadow-sm animate-in fade-in slide-in-from-bottom-2 duration-300">
+                                    <div className="flex items-center gap-4 overflow-hidden">
+                                        <Star className="text-yellow-500 group-hover:scale-110 transition-transform shrink-0" /> 
+                                        <span className="font-bold text-sm text-yellow-500 truncate">Favoris</span>
                                     </div>
-                                ))}
+                                    <span className="text-xs bg-yellow-500/10 text-yellow-500 px-2 py-0.5 rounded-full font-medium shrink-0">
+                                        {getFavorites(type).length}
+                                    </span>
+                                </div>
+                                {filteredCategories.map((cat, index) => {
+                                    const count = categoryCounts[cat.category_id] || 0;
+                                    return (
+                                        <div key={`${cat.category_id}-${index}`} onClick={() => handleCategorySelect(cat)}
+                                            className="bg-fluent-layer hover:bg-fluent-layerHover border border-fluent-border p-5 rounded-window cursor-pointer transition-all flex items-center justify-between group shadow-sm animate-in fade-in slide-in-from-bottom-2 duration-300"
+                                            style={{ animationDelay: `${Math.min(index * 20, 300)}ms` }}
+                                        >
+                                            <div className="flex items-center gap-4 overflow-hidden">
+                                                <Folder className="text-fluent-accent group-hover:scale-110 transition-transform shrink-0" /> 
+                                                <span className="font-semibold text-sm truncate">{cat.category_name}</span>
+                                            </div>
+                                            {count > 0 && (
+                                                <span className="text-xs bg-white/5 text-white/50 px-2 py-0.5 rounded-full font-medium shrink-0 group-hover:bg-fluent-accent/15 group-hover:text-fluent-accent transition-colors">
+                                                    {count}
+                                                </span>
+                                            )}
+                                        </div>
+                                    );
+                                })}
                             </motion.div>
                         ) : currentLevel === 'detail' && selectedItem ? (
                             <motion.div
