@@ -5,7 +5,7 @@ import {
   SkipBack, SkipForward, Settings, List, ListVideo, ChevronLeft, ChevronRight, Square,
   Expand, Shrink, RefreshCw, Clock, Info, Columns, AudioLines, Captions,
   ChevronUp, ChevronDown, Search, MonitorPlay, Tv, PictureInPicture,
-  RotateCcw, RotateCw, Film, Link, Check, Lock, Unlock
+  RotateCcw, RotateCw, Film, Link, Check, Lock, Unlock, Sun
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import shaka from 'shaka-player';
@@ -94,6 +94,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const [isLoading, setIsLoading] = useState(true);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [autoPlayBlocked, setAutoPlayBlocked] = useState(false);
+  const [brightness, setBrightness] = useState(1.0);
   
   // Resume State
   const [resumePoint, setResumePoint] = useState<number | null>(null);
@@ -1026,6 +1027,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         <video 
             ref={videoRef}
             className="w-full h-full object-contain"
+            style={{ filter: brightness !== 1.0 ? `brightness(${brightness})` : undefined }}
             onClick={togglePlay}
             onDoubleClick={onToggleEmbed ? onToggleEmbed : toggleFullscreen}
             onEnded={handleVideoEnded}
@@ -1353,6 +1355,24 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                             step="0.05" 
                             value={isMuted ? 0 : volume} 
                             onChange={handleVolumeChange}
+                            className="w-0 group-hover:w-20 transition-all duration-300 opacity-0 group-hover:opacity-100 cursor-pointer accent-[#2196f3]"
+                        />
+                    </div>
+                    <div className="flex items-center gap-2 group">
+                        <button 
+                            onClick={() => setBrightness(1.0)} 
+                            className="text-white/70 hover:text-white transition-colors p-2 hover:bg-white/10 rounded-full" 
+                            title="Luminosité (Cliquer pour réinitialiser)"
+                        >
+                            <Sun size={24} />
+                        </button>
+                        <input 
+                            type="range" 
+                            min="0.3" 
+                            max="2.0" 
+                            step="0.05" 
+                            value={brightness} 
+                            onChange={(e) => setBrightness(parseFloat(e.target.value))}
                             className="w-0 group-hover:w-20 transition-all duration-300 opacity-0 group-hover:opacity-100 cursor-pointer accent-[#2196f3]"
                         />
                     </div>
