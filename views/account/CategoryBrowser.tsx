@@ -125,7 +125,7 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
     return base.filter(item => 
         (item.name || "").toLowerCase().includes(q)
     );
-  }, [displayData, selectedCategory, searchQuery, getFavorites, type]);
+  }, [displayData, selectedCategory, searchQuery, getFavorites, getHistory, type]);
 
   // Memoized count of items in each category
   const categoryCounts = useMemo(() => {

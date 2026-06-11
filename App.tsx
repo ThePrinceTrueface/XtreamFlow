@@ -6,6 +6,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from './db';
 import { useAccounts } from './hooks/useAccounts';
 import { useServers } from './hooks/useServers';
+import { useAppStore } from './store/useAppStore';
 import { XtreamAccount, ViewState, ModalConfig, ModalType, SavedServer, AppBackup } from './types';
 import { AcrylicPanel, Modal } from './components/Win11UI';
 import { generateId, createProxyUrl } from './utils';
@@ -65,60 +66,38 @@ const TitleBar: React.FC<{
 export default function App() {
   const navigate = useNavigate();
   const location = useLocation();
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  const [playingDownload, setPlayingDownload] = useState<{ url: string, title: string, type: 'live' | 'vod' | 'series' } | null>(null);
   
+  // App-wide Zustand state
+  const {
+    isSidebarCollapsed,
+    playingDownload,
+    editingAccount,
+    serverToPrefill,
+    initialSearchQuery,
+    accentColor,
+    themeMode,
+    modal,
+    toast,
+    isGlobalSearchOpen,
+    isShortcutsModalOpen,
+    setSidebarCollapsed,
+    setPlayingDownload,
+    setEditingAccount,
+    setServerToPrefill,
+    setInitialSearchQuery,
+    setAccentColor,
+    setThemeMode,
+    setIsGlobalSearchOpen,
+    setIsShortcutsModalOpen,
+    showModal,
+    closeModal,
+    showToast,
+  } = useAppStore();
+
   // Data State (using custom hooks)
   const { accounts } = useAccounts();
   const { servers: savedServers } = useServers();
   
-  // View/Selection State
-  const [editingAccount, setEditingAccount] = useState<XtreamAccount | null>(null);
-  
-  // Cross-View State passing
-  const [serverToPrefill, setServerToPrefill] = useState<SavedServer | null>(null);
-  const [initialSearchQuery, setInitialSearchQuery] = useState<string>('');
-  const [accentColor, setAccentColor] = useState(() => {
-    return localStorage.getItem('xtream_accent_color') || '#FF0080';
-  });
-
-  const [themeMode, setThemeMode] = useState<'dark' | 'light'>(() => {
-    return (localStorage.getItem('xtream_theme_mode') as 'dark' | 'light') || 'dark';
-  });
-
-  useEffect(() => {
-    const root = document.documentElement;
-    root.style.setProperty('--fluent-accent', accentColor);
-    // Simple hover color calculation (adding transparency)
-    root.style.setProperty('--fluent-accent-hover', accentColor + 'CC');
-    localStorage.setItem('xtream_accent_color', accentColor);
-  }, [accentColor]);
-
-  useEffect(() => {
-    localStorage.setItem('xtream_theme_mode', themeMode);
-    if (themeMode === 'light') {
-      document.documentElement.classList.add('light');
-      document.documentElement.classList.remove('dark');
-    } else {
-      document.documentElement.classList.add('dark');
-      document.documentElement.classList.remove('light');
-    }
-  }, [themeMode]);
-  
-  // Modal State
-  const [modal, setModal] = useState<ModalConfig>({
-    isOpen: false,
-    type: 'info',
-    title: '',
-    message: null,
-  });
-
-  // Toast State
-  const [toast, setToast] = useState<{ message: string; show: boolean }>({ message: '', show: false });
-
-  // Global Search State
-  const [isGlobalSearchOpen, setIsGlobalSearchOpen] = useState(false);
-  const [isShortcutsModalOpen, setIsShortcutsModalOpen] = useState(false);
   const accountMatch = location.pathname.match(/\/account\/([^\/]+)/);
   const activeAccountId = accountMatch ? accountMatch[1] : null;
 
@@ -129,8 +108,7 @@ export default function App() {
       const stream = result.data;
       const account = await db.accounts.get(stream.accountId);
       if (!account) {
-        setToast({ message: 'Compte introuvable pour ce flux', show: true });
-        setTimeout(() => setToast({ message: '', show: false }), 3000);
+        showToast('Compte introuvable pour ce flux');
         return;
       }
 
@@ -142,8 +120,7 @@ export default function App() {
       const account = await db.accounts.get(prog.accountId);
       if (account) {
         navigate(`/account/${account.id}/live/all/${prog.channel_id}?autoplay=true`);
-        setToast({ message: `Programme: ${prog.title}`, show: true });
-        setTimeout(() => setToast({ message: '', show: false }), 4000);
+        showToast(`Programme: ${prog.title}`);
       }
     }
   };
@@ -156,8 +133,7 @@ export default function App() {
         if (activeAccountId) {
           setIsGlobalSearchOpen(true);
         } else {
-          setToast({ message: 'Ouvrez un compte pour rechercher du contenu', show: true });
-          setTimeout(() => setToast({ message: '', show: false }), 3000);
+          showToast('Ouvrez un compte pour rechercher du contenu');
         }
       }
 
@@ -194,7 +170,7 @@ export default function App() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activeAccountId, navigate]);
+  }, [activeAccountId, navigate, setIsGlobalSearchOpen, showToast, setIsShortcutsModalOpen]);
 
   // Migration & Initial Load
   useEffect(() => {
@@ -234,45 +210,7 @@ export default function App() {
     };
 
     migrate();
-    
-    const savedSidebarState = localStorage.getItem('sidebar_collapsed');
-    if (savedSidebarState !== null) {
-      setIsSidebarCollapsed(savedSidebarState === 'true');
-    }
   }, []);
-
-  useEffect(() => {
-    localStorage.setItem('sidebar_collapsed', isSidebarCollapsed.toString());
-  }, [isSidebarCollapsed]);
-
-  const closeModal = () => {
-    setModal(prev => ({ ...prev, isOpen: false }));
-  };
-
-  const handleToast = (message: string) => {
-    setToast({ message, show: true });
-    setTimeout(() => setToast(prev => ({ ...prev, show: false })), 3000);
-  };
-
-  const showModal = (
-    type: ModalType, 
-    title: string, 
-    message: React.ReactNode, 
-    onConfirm?: () => void,
-    confirmLabel = "Confirm",
-    cancelLabel = "Cancel"
-  ) => {
-    setModal({
-      isOpen: true,
-      type,
-      title,
-      message,
-      onConfirm: onConfirm ? () => { onConfirm(); closeModal(); } : undefined,
-      onCancel: closeModal,
-      confirmLabel,
-      cancelLabel
-    });
-  };
 
   // --- Account Logic ---
 
@@ -337,7 +275,7 @@ export default function App() {
 
   const handleSaveServer = async (server: SavedServer) => {
       await db.servers.put(server);
-      handleToast("Server saved to library");
+      showToast("Server saved to library");
   };
 
   const handleDeleteServer = (id: string) => {
@@ -347,7 +285,7 @@ export default function App() {
           'Remove this server from your library? Linked accounts will not be deleted.',
           async () => {
              await db.servers.delete(id);
-             handleToast("Server removed");
+             showToast("Server removed");
           }
       );
   };
@@ -514,7 +452,7 @@ export default function App() {
                 activeView={getActiveViewForSidebar() as ViewState} 
                 setView={(view) => navigate(`/${view}`)} 
                 isCollapsed={isSidebarCollapsed}
-                onToggle={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+                onToggle={() => setSidebarCollapsed(!isSidebarCollapsed)}
                 isMobileMenuOpen={isMobileMenuOpen}
               />
               
@@ -556,7 +494,7 @@ export default function App() {
                       onDelete={deleteAccount} 
                       onEdit={startEditing}
                       onToggleFavorite={toggleFavorite}
-                      showToast={handleToast}
+                      showToast={showToast}
                       onOpenAdvancedSearch={() => {}}
                       onSelect={handleSelectAccount}
                       onUpdate={(acc) => handleSaveAccount(acc, true)}

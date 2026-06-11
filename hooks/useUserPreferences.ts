@@ -1,59 +1,38 @@
-
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { GlobalPreferences, StreamProgress, XtreamStream, AccountPreferences } from '../types';
-
-const STORAGE_KEY = 'xtream_user_prefs';
+import { useCallback, useMemo } from 'react';
+import { usePreferencesStore } from '../store/usePreferencesStore';
+import { XtreamStream, StreamProgress, PlayerSettings } from '../types';
 
 export const useUserPreferences = (accountId: string) => {
-  // Load initial state safely
-  const loadPrefs = (): GlobalPreferences => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (!stored) return {};
-      const parsed = JSON.parse(stored) as GlobalPreferences;
-      
-      // Migration & Structure Integrity
-      Object.keys(parsed).forEach(accId => {
-          const acc = parsed[accId];
-          // If old favorites exist (array or old object), reset or migrate
-          if (!acc.favoritesTable || Array.isArray(acc.favoritesTable)) {
-              acc.favoritesTable = { live: [], vod: [], series: [] };
-          }
-          // Clean up old key if exists
-          if ((acc as any).favorites) delete (acc as any).favorites;
-      });
-      
-      return parsed;
-    } catch (e) {
-      console.error("Failed to load user preferences", e);
-      return {};
-    }
-  };
+  // Select the specific account's preferences from the reactive Zustand store.
+  // This hook call guarantees that whenever this specific account's preferences update,
+  // the component invoking useUserPreferences(accountId) re-renders automatically!
+  const accountPrefs = usePreferencesStore(state => state.prefs[accountId]);
 
-  // Internal state for UI reactivity
-  const [prefs, setPrefs] = useState<GlobalPreferences>(loadPrefs);
+  // Actions from the store
+  const toggleFavoriteAction = usePreferencesStore(state => state.toggleFavorite);
+  const updateProgressAction = usePreferencesStore(state => state.updateProgress);
+  const clearProgressAction = usePreferencesStore(state => state.clearProgress);
+  const addToHistoryAction = usePreferencesStore(state => state.addToHistory);
+  const clearHistoryAction = usePreferencesStore(state => state.clearHistory);
+  const updatePlayerSettingsAction = usePreferencesStore(state => state.updatePlayerSettings);
+  const toggleAutoPlayNavigationAction = usePreferencesStore(state => state.toggleAutoPlayNavigation);
 
-  // Sync to local storage whenever prefs change
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
-  }, [prefs]);
-
-  // --- Favorites Logic ---
+  const favoritesTable = accountPrefs?.favoritesTable;
+  const history = accountPrefs?.history;
 
   const getFavorites = useCallback((type: 'live' | 'vod' | 'series'): XtreamStream[] => {
-    return prefs[accountId]?.favoritesTable?.[type] || [];
-  }, [prefs, accountId]);
+    return favoritesTable?.[type] || [];
+  }, [favoritesTable]);
 
   // Memoize sets of favorite IDs for O(1) lookups during render
   const favoriteIds = useMemo(() => {
-     const table = prefs[accountId]?.favoritesTable;
      const sets = {
          live: new Set<string>(),
          vod: new Set<string>(),
          series: new Set<string>(),
          all: new Set<string>()
      };
-     if (!table) return sets;
+     if (!favoritesTable) return sets;
 
      const addIds = (arr: XtreamStream[] | undefined, set: Set<string>) => {
          if (!arr) return;
@@ -64,14 +43,14 @@ export const useUserPreferences = (accountId: string) => {
                  sets.all.add(id);
              }
          }
-     }
+     };
 
-     addIds(table.live, sets.live);
-     addIds(table.vod, sets.vod);
-     addIds(table.series, sets.series);
+     addIds(favoritesTable.live, sets.live);
+     addIds(favoritesTable.vod, sets.vod);
+     addIds(favoritesTable.series, sets.series);
 
      return sets;
-  }, [prefs, accountId]);
+  }, [favoritesTable]);
 
   const isFavorite = useCallback((itemId: string | number | undefined, type?: 'live' | 'vod' | 'series'): boolean => {
     if (!itemId) return false;
@@ -84,125 +63,29 @@ export const useUserPreferences = (accountId: string) => {
   }, [favoriteIds]);
 
   const toggleFavorite = useCallback((item: XtreamStream, type: 'live' | 'vod' | 'series') => {
-    const itemId = item.stream_id || item.series_id;
-    if (!itemId) return;
-    const idStr = itemId.toString();
-    
-    setPrefs(prev => {
-      const accountData = prev[accountId] || { favoritesTable: { live: [], vod: [], series: [] }, history: {} };
-      const table = accountData.favoritesTable || { live: [], vod: [], series: [] };
-      
-      const typeFavs = table[type] || [];
-      const isFav = typeFavs.some(f => (f.stream_id || f.series_id || "").toString() === idStr);
-
-      const newTypeFavs = isFav
-        ? typeFavs.filter(f => (f.stream_id || f.series_id || "").toString() !== idStr)
-        : [...typeFavs, item];
-
-      return {
-        ...prev,
-        [accountId]: {
-          ...accountData,
-          favoritesTable: {
-            ...table,
-            [type]: newTypeFavs
-          }
-        }
-      };
-    });
-  }, [accountId]);
-
-  // --- History / Progress Logic ---
+    toggleFavoriteAction(accountId, item, type);
+  }, [accountId, toggleFavoriteAction]);
 
   const getProgress = useCallback((itemId: string | number | undefined): StreamProgress | null => {
     if (!itemId) return null;
     const idStr = itemId.toString();
-    return prefs[accountId]?.history?.[idStr] || null;
-  }, [prefs, accountId]);
+    return history?.[idStr] || null;
+  }, [history]);
 
   const updateProgress = useCallback((item: XtreamStream, time: number, duration: number) => {
-    const itemId = item.stream_id || item.series_id;
-    if (!itemId || duration <= 0) return;
-    const idStr = itemId.toString();
-    const progress = time / duration;
-    const finished = progress > 0.92; // Mark as finished if > 92% watched
-
-    setPrefs(prev => {
-      const accountData = prev[accountId] || { favoritesTable: { live: [], vod: [], series: [] }, history: {} } as AccountPreferences;
-      
-      return {
-        ...prev,
-        [accountId]: {
-          ...accountData,
-          history: {
-            ...accountData.history,
-            [idStr]: {
-              time,
-              duration,
-              progress,
-              finished,
-              lastWatched: Date.now(),
-              item
-            }
-          }
-        }
-      };
-    });
-  }, [accountId]);
+    updateProgressAction(accountId, item, time, duration);
+  }, [accountId, updateProgressAction]);
 
   const clearProgress = useCallback((itemId: string | number | undefined) => {
-     if (!itemId) return;
-     const idStr = itemId.toString();
-     setPrefs(prev => {
-        const accountData = prev[accountId];
-        if (!accountData) return prev;
-
-        const newHistory = { ...accountData.history };
-        delete newHistory[idStr];
-
-        return {
-            ...prev,
-            [accountId]: { ...accountData, history: newHistory }
-        };
-     });
-  }, [accountId]);
+    clearProgressAction(accountId, itemId);
+  }, [accountId, clearProgressAction]);
 
   const addToHistory = useCallback((item: XtreamStream, streamType: 'live' | 'vod' | 'series') => {
-    const itemId = item.stream_id || item.series_id;
-    if (!itemId) return;
-    const idStr = itemId.toString();
-
-    setPrefs(prev => {
-      const accountData = prev[accountId] || { favoritesTable: { live: [], vod: [], series: [] }, history: {} } as AccountPreferences;
-      const current = accountData.history?.[idStr];
-      
-      const updatedEntry: StreamProgress = {
-        time: current?.time || 0,
-        duration: current?.duration || 0,
-        progress: current?.progress || 0,
-        finished: current?.finished || false,
-        lastWatched: Date.now(),
-        item: {
-          ...item,
-          stream_type: streamType
-        }
-      };
-
-      return {
-        ...prev,
-        [accountId]: {
-          ...accountData,
-          history: {
-            ...accountData.history,
-            [idStr]: updatedEntry
-          }
-        }
-      };
-    });
-  }, [accountId]);
+    addToHistoryAction(accountId, item, streamType);
+  }, [accountId, addToHistoryAction]);
 
   const getHistory = useCallback((type?: 'live' | 'vod' | 'series'): XtreamStream[] => {
-    const historyMap = prefs[accountId]?.history || {};
+    const historyMap = history || {};
     return Object.values(historyMap)
       .filter((h: any) => {
         if (!h.item) return false;
@@ -212,74 +95,27 @@ export const useUserPreferences = (accountId: string) => {
       })
       .sort((a, b) => b.lastWatched - a.lastWatched)
       .map(h => h.item as XtreamStream);
-  }, [prefs, accountId]);
+  }, [history]);
 
   const clearHistory = useCallback((type?: 'live' | 'vod' | 'series') => {
-    setPrefs(prev => {
-      const accountData = prev[accountId];
-      if (!accountData || !accountData.history) return prev;
-
-      const newHistory = { ...accountData.history };
-      if (!type) {
-        // Clear all history
-        return {
-          ...prev,
-          [accountId]: { ...accountData, history: {} }
-        };
-      }
-
-      // Filter and delete items of specific type
-      Object.keys(newHistory).forEach(key => {
-        if (newHistory[key]?.item?.stream_type === type) {
-          delete newHistory[key];
-        }
-      });
-
-      return {
-        ...prev,
-        [accountId]: { ...accountData, history: newHistory }
-      };
-    });
-  }, [accountId]);
-
-  // --- Player Settings Logic ---
+    clearHistoryAction(accountId, type);
+  }, [accountId, clearHistoryAction]);
 
   const getPlayerSettings = useCallback(() => {
-    return prefs[accountId]?.playerSettings || { reconnectDelay: 5000 as const };
-  }, [prefs, accountId]);
+    return accountPrefs?.playerSettings || { reconnectDelay: 5000 as const };
+  }, [accountPrefs]);
 
-  const updatePlayerSettings = useCallback((settings: Partial<import('../types').PlayerSettings>) => {
-    setPrefs(prev => {
-      const accountData = prev[accountId] || { favoritesTable: { live: [], vod: [], series: [] }, history: {} } as AccountPreferences;
-      return {
-        ...prev,
-        [accountId]: {
-          ...accountData,
-          playerSettings: {
-            ...(accountData.playerSettings || { reconnectDelay: 5000 as const }),
-            ...settings
-          }
-        }
-      };
-    });
-  }, [accountId]);
+  const updatePlayerSettings = useCallback((settings: Partial<PlayerSettings>) => {
+    updatePlayerSettingsAction(accountId, settings);
+  }, [accountId, updatePlayerSettingsAction]);
 
   const getAutoPlayNavigation = useCallback(() => {
-    return prefs[accountId]?.autoPlayNavigation ?? false; // default false
-  }, [prefs, accountId]);
+    return accountPrefs?.autoPlayNavigation ?? false;
+  }, [accountPrefs]);
 
   const toggleAutoPlayNavigation = useCallback((value: boolean) => {
-    setPrefs(prev => {
-      const accountData = prev[accountId] || { favoritesTable: { live: [], vod: [], series: [] }, history: {} } as AccountPreferences;
-      return {
-        ...prev,
-        [accountId]: {
-          ...accountData,
-          autoPlayNavigation: value
-        }
-      };
-    });
-  }, [accountId]);
+    toggleAutoPlayNavigationAction(accountId, value);
+  }, [accountId, toggleAutoPlayNavigationAction]);
 
   return {
     isFavorite,

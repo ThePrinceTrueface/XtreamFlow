@@ -12,6 +12,7 @@ import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../db';
 import { useUserPreferences } from '../../hooks/useUserPreferences';
+import { useAppStore } from '../../store/useAppStore';
 
 interface RevisionResults {
   userInfo: any;
@@ -56,7 +57,9 @@ export const AccountDetailView: React.FC<{
 
   const [activeTab, setActiveTab] = useState(tabFromUrl);
   const [visitedTabs, setVisitedTabs] = useState<Set<string>>(new Set([tabFromUrl]));
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  
+  // Zustand state and helper functions
+  const { isSidebarCollapsed, setSidebarCollapsed, showModal } = useAppStore();
   
   const { getAutoPlayNavigation } = useUserPreferences(accountId || '');
   const autoPlayItem = autoPlayFromUrl || getAutoPlayNavigation();
@@ -71,10 +74,6 @@ export const AccountDetailView: React.FC<{
   const [updateOptions, setUpdateOptions] = useState({ live: true, vod: true, series: true, epg: false });
   const [isUpdating, setIsUpdating] = useState(false);
   const [updateProgressData, setUpdateProgressData] = useState({ step: '', percent: 0 });
-
-  // -- DIALOG/POPUP STATE --
-  const [infoModal, setInfoModal] = useState<{ isOpen: boolean; title: string; message: string; type: 'success' | 'error' | 'info' | 'warning' }>({ isOpen: false, title: '', message: '', type: 'info' });
-  const [confirmModal, setConfirmModal] = useState<{ isOpen: boolean; title: string; message: string; action: () => void; isWarning?: boolean }>({ isOpen: false, title: '', message: '', action: () => {}, isWarning: false });
   
   useEffect(() => {
     setActiveTab(tabFromUrl);
@@ -168,10 +167,10 @@ export const AccountDetailView: React.FC<{
         await cacheService.prefetchCatalogue(account, (step, percent) => {
           setPreloadProgressData({ step, percent });
         });
-        setInfoModal({ isOpen: true, title: 'Succès', message: 'Toutes les catégories et listes de flux ont été mises en cache avec succès pour une navigation hors-ligne !', type: 'success' });
+        showModal('success', 'Succès', 'Toutes les catégories et listes de flux ont été mises en cache avec succès pour une navigation hors-ligne !');
       } catch (err) {
         console.error("Erreur de préchargement:", err);
-        setInfoModal({ isOpen: true, title: 'Erreur', message: 'Une erreur est survenue lors du préchargement. Certaines données pourraient manquer.', type: 'error' });
+        showModal('error', 'Erreur', 'Une erreur est survenue lors du préchargement. Certaines données pourraient manquer.');
       } finally {
         setIsPreloading(false);
       }
@@ -180,25 +179,24 @@ export const AccountDetailView: React.FC<{
 
   const handleClearLocalCache = () => {
     if (!account) return;
-    setConfirmModal({
-        isOpen: true,
-        title: 'Vider le cache',
-        message: "Voulez-vous vraiment supprimer toutes les données de cette playlist du cache local (catégories, flux, EPG) ? Cela forcera l'application à les re-télécharger.",
-        isWarning: true,
-        action: async () => {
+    showModal(
+        'warning',
+        'Vider le cache',
+        "Voulez-vous vraiment supprimer toutes les données de cette playlist du cache local (catégories, flux, EPG) ? Cela forcera l'application à les re-télécharger.",
+        async () => {
             try {
                 await db.clearAccountCache(account.id);
                 // Reset preload preference so the prompt shows up again if desired
                 await db.accounts.update(account.id, { preloadPreference: undefined });
-                setConfirmModal(prev => ({ ...prev, isOpen: false }));
-                setInfoModal({ isOpen: true, title: 'Cache vidé', message: 'Le cache a été vidé avec succès !', type: 'success' });
+                showModal('success', 'Cache vidé', 'Le cache a été vidé avec succès !');
             } catch (err) {
                 console.error("Erreur vidage cache:", err);
-                setConfirmModal(prev => ({ ...prev, isOpen: false }));
-                setInfoModal({ isOpen: true, title: 'Erreur', message: 'Impossible de vider le cache.', type: 'error' });
+                showModal('error', 'Erreur', 'Impossible de vider le cache.');
             }
-        }
-    });
+        },
+        'Oui, continuer',
+        'Annuler'
+    );
   };
 
   const handleUpdatePlaylist = async () => {
@@ -209,10 +207,10 @@ export const AccountDetailView: React.FC<{
           await cacheService.updateCatalogue(account, updateOptions, (step, percent) => {
               setUpdateProgressData({ step, percent });
           });
-          setInfoModal({ isOpen: true, title: 'Mise à jour réussie', message: 'Mise à jour complète et réussie !', type: 'success' });
+          showModal('success', 'Mise à jour réussie', 'Mise à jour complète et réussie !');
       } catch (err) {
           console.error("Erreur de mise à jour:", err);
-          setInfoModal({ isOpen: true, title: 'Erreur', message: 'Erreur lors de la mise à jour de la playlist.', type: 'error' });
+          showModal('error', 'Erreur', 'Erreur lors de la mise à jour de la playlist.');
       } finally {
           setIsUpdating(false);
       }
@@ -661,7 +659,7 @@ export const AccountDetailView: React.FC<{
         onBack={onBack}
         accountName={account?.name || ''}
         isCollapsed={isSidebarCollapsed}
-        onToggle={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+        onToggle={() => setSidebarCollapsed(!isSidebarCollapsed)}
         onOpenSearch={onOpenSearch}
         isMobileMenuOpen={isMobileMenuOpen}
       />
@@ -1104,29 +1102,6 @@ export const AccountDetailView: React.FC<{
                       <Button onClick={handleUpdatePlaylist} disabled={!updateOptions.live && !updateOptions.vod && !updateOptions.series && !updateOptions.epg}>Démarrer la mise à jour</Button>
                   </div>
               </div>
-         </Modal>
-
-         {/* CUSTOM INFO MODAL */}
-         <Modal 
-            isOpen={infoModal.isOpen} 
-            onCancel={() => setInfoModal({ ...infoModal, isOpen: false })} 
-            title={infoModal.title} 
-            type={infoModal.type as any}
-         >
-            <p>{infoModal.message}</p>
-         </Modal>
-
-         {/* CUSTOM CONFIRM MODAL */}
-         <Modal 
-            isOpen={confirmModal.isOpen} 
-            onCancel={() => setConfirmModal({ ...confirmModal, isOpen: false })} 
-            onConfirm={confirmModal.action}
-            title={confirmModal.title} 
-            type={confirmModal.isWarning ? 'warning' : 'confirm'}
-            confirmLabel="Oui, continuer"
-            cancelLabel="Annuler"
-         >
-            <p>{confirmModal.message}</p>
          </Modal>
 
       </div>
