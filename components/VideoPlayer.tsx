@@ -68,6 +68,17 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const [showLockIndicator, setShowLockIndicator] = useState(false);
   const [showAdvancedControls, setShowAdvancedControls] = useState(false);
   const [activeMenu, setActiveMenu] = useState<'none' | 'channels' | 'audio' | 'subtitles' | 'settings'>('none');
+  const [playbackRate, setPlaybackRateState] = useState(1.0);
+  const playbackRateRef = useRef(1.0);
+  
+  const setPlaybackRate = (rate: number) => {
+    playbackRateRef.current = rate;
+    setPlaybackRateState(rate);
+    if (videoRef.current) {
+      videoRef.current.playbackRate = rate;
+    }
+  };
+
   const [currentTimeString, setCurrentTimeString] = useState('');
 
   // Clock Update
@@ -126,6 +137,12 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
      }
      return initialUrl;
   });
+
+  useEffect(() => {
+    if (videoRef.current) {
+      videoRef.current.playbackRate = playbackRate;
+    }
+  }, [playbackRate, activeUrl]);
   
   useEffect(() => {
      let newUrl = url;
@@ -631,13 +648,17 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
             setCurrentTime(video.currentTime);
         }
     };
-    const updateDuration = () => setDuration(video.duration);
+    const updateDuration = () => {
+        setDuration(video.duration);
+        video.playbackRate = playbackRateRef.current;
+    };
     const onWaiting = () => setIsLoading(true);
     const onPlaying = () => {
         setIsLoading(false);
         setIsRetrying(false);
         setIsPlaying(true);
         setError(null);
+        video.playbackRate = playbackRateRef.current;
     };
     const onPause = () => setIsPlaying(false);
 
@@ -1589,6 +1610,26 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                                             ))}
                                         </div>
                                     </div>
+
+                                    {type !== 'live' && (
+                                        <div>
+                                            <p className="text-[10px] font-bold text-white/30 uppercase mb-2 ml-1">Vitesse de lecture (Speed)</p>
+                                            <div className="grid grid-cols-5 gap-1 select-none">
+                                                {[0.5, 0.75, 1.0, 1.25, 1.5, 2.0].map((rate) => (
+                                                    <button
+                                                        key={rate}
+                                                        onClick={() => setPlaybackRate(rate)}
+                                                        className={`text-center py-1.5 rounded-lg text-[11px] font-bold transition-all
+                                                            ${playbackRate === rate 
+                                                                ? 'bg-[#2196f3] text-white shadow-md border border-white/10' 
+                                                                : 'text-white/50 hover:bg-white/10 bg-white/5 border border-transparent'}`}
+                                                    >
+                                                        {rate === 1.0 ? 'Norm' : `${rate}x`}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         )}
