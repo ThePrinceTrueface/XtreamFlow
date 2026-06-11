@@ -1,14 +1,15 @@
 
 import React, { useState, useMemo } from 'react';
-import { Layers, Folder, Star, Search } from 'lucide-react';
+import { Layers, Folder, Star, Search, Clock } from 'lucide-react';
 import { XtreamCategory } from '../../../types';
 
 interface AdvancedSidebarProps {
   categories: XtreamCategory[];
   selectedCategoryId: string | null;
-  onSelectCategory: (cat: XtreamCategory | null | 'favorites') => void;
+  onSelectCategory: (cat: XtreamCategory | null | 'favorites' | 'history') => void;
   categoryCounts?: Record<string, number>;
   favoritesCount?: number;
+  historyCount?: number;
 }
 
 export const AdvancedSidebar: React.FC<AdvancedSidebarProps> = ({ 
@@ -16,7 +17,8 @@ export const AdvancedSidebar: React.FC<AdvancedSidebarProps> = ({
   selectedCategoryId, 
   onSelectCategory,
   categoryCounts,
-  favoritesCount
+  favoritesCount,
+  historyCount
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -47,6 +49,17 @@ export const AdvancedSidebar: React.FC<AdvancedSidebarProps> = ({
           </div>
           {favoritesCount !== undefined && favoritesCount > 0 && (
             <span className="text-[10px] px-1.5 py-0.5 rounded bg-yellow-500/10 text-yellow-500 font-medium shrink-0">{favoritesCount}</span>
+          )}
+        </button>
+
+        <button onClick={() => onSelectCategory('history')}
+          className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-[13px] transition-all group relative mb-2 ${selectedCategoryId === 'history' ? 'bg-fluent-accent/10 text-fluent-accent font-semibold' : 'hover:bg-white/5 text-fluent-subtext'}`}>
+          <div className="flex items-center gap-3 overflow-hidden">
+            {selectedCategoryId === 'history' && <div className="absolute left-0 w-1 h-4 bg-fluent-accent rounded-r-full" />}
+            <Clock size={18} className={`shrink-0 ${selectedCategoryId === 'history' ? 'text-fluent-accent' : 'opacity-40 group-hover:opacity-100'}`} /> <span className="truncate">Historique</span>
+          </div>
+          {historyCount !== undefined && historyCount > 0 && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-fluent-accent/10 text-fluent-accent font-medium shrink-0">{historyCount}</span>
           )}
         </button>
         

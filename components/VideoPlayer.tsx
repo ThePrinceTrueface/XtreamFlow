@@ -51,7 +51,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const lockTimeoutRef = useRef<number | null>(null);
   
   // Hook for Preferences
-  const { updateProgress, getProgress, getPlayerSettings, updatePlayerSettings } = useUserPreferences(account?.id || 'guest');
+  const { updateProgress, getProgress, getPlayerSettings, updatePlayerSettings, addToHistory } = useUserPreferences(account?.id || 'guest');
   const playerSettings = getPlayerSettings();
   const saveIntervalRef = useRef<number | null>(null);
   const isDraggingRef = useRef(false);
@@ -290,6 +290,13 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         if (saveIntervalRef.current) clearInterval(saveIntervalRef.current);
     };
   }, [currentItem, type, updateProgress]);
+ 
+  // Add to watch history
+  useEffect(() => {
+    if (currentItem && type) {
+      addToHistory(currentItem, type);
+    }
+  }, [currentItem, type, addToHistory]);
 
 
   // Initialize Player (HLS or Native)

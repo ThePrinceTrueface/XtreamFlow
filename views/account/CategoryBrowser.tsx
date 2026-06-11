@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
-import { Tv, RefreshCw, ArrowLeft, Search, Folder, Layout, List, Film, Clapperboard, Columns, PanelLeftOpen, PanelLeftClose, Star } from 'lucide-react';
+import { Tv, RefreshCw, ArrowLeft, Search, Folder, Layout, List, Film, Clapperboard, Columns, PanelLeftOpen, PanelLeftClose, Star, Clock } from 'lucide-react';
 import { XtreamAccount, XtreamCategory, XtreamStream } from '../../types';
 import { Button } from '../../components/Win11UI';
 import { VideoPlayer } from '../../components/VideoPlayer';
@@ -22,6 +22,7 @@ import { StreamListSidebar } from './components/StreamListSidebar';
 import { EPGView } from './components/EPGView';
 
 const FAVORITES_CATEGORY: XtreamCategory = { category_id: 'favorites', category_name: 'Favoris', parent_id: 0 };
+const HISTORY_CATEGORY: XtreamCategory = { category_id: 'history', category_name: 'Historique', parent_id: 0 };
 
 interface CategoryBrowserProps {
     account: XtreamAccount;
@@ -94,7 +95,7 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
   const preselectionHandledRef = useRef<string | null>(null);
   const autoPlayedRef = useRef<string | null>(null);
 
-  const { isFavorite, getFavorites } = useUserPreferences(account.id);
+  const { isFavorite, getFavorites, getHistory } = useUserPreferences(account.id);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -108,6 +109,13 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
         if (!searchQuery) return favs;
         const q = searchQuery.toLowerCase();
         return favs.filter(item => (item.name || "").toLowerCase().includes(q));
+    }
+
+    if (selectedCategory?.category_id === 'history') {
+        const hist = getHistory(type);
+        if (!searchQuery) return hist;
+        const q = searchQuery.toLowerCase();
+        return hist.filter(item => (item.name || "").toLowerCase().includes(q));
     }
 
     const base = displayData;
@@ -219,12 +227,16 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
     // 1. Handle Category Preselection
     if (preselectedChannelId) {
       const isFav = preselectedChannelId === 'favorites';
+      const isHist = preselectedChannelId === 'history';
       const currentCatId = selectedCategory?.category_id;
       
       if (isFav && currentCatId !== 'favorites') {
         setSelectedCategory(FAVORITES_CATEGORY);
         setCurrentLevel('items');
-      } else if (!isFav && preselectedChannelId !== 'all' && currentCatId !== preselectedChannelId) {
+      } else if (isHist && currentCatId !== 'history') {
+        setSelectedCategory(HISTORY_CATEGORY);
+        setCurrentLevel('items');
+      } else if (!isFav && !isHist && preselectedChannelId !== 'all' && currentCatId !== preselectedChannelId) {
         const category = categories.find(c => c.category_id === preselectedChannelId);
         if (category) {
           setSelectedCategory(category);
@@ -509,7 +521,7 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
     return categories.filter(c => c.category_name.toLowerCase().includes(searchQuery.toLowerCase()));
   }, [categories, searchQuery, currentLevel]);
 
-  const handleCategorySelect = async (cat: XtreamCategory | null | 'favorites') => {
+  const handleCategorySelect = async (cat: XtreamCategory | null | 'favorites' | 'history') => {
     setSearchQuery('');
     
     if (cat === 'favorites') {
@@ -519,6 +531,16 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
         setSelectedItem(null);
         setHeroIndex(-1);
         navigate(`/account/${account.id}/${type}/favorites`);
+        return;
+    }
+
+    if (cat === 'history') {
+        setSelectedCategory(HISTORY_CATEGORY);
+        setCurrentLevel('items');
+        setHistoryStack([]);
+        setSelectedItem(null);
+        setHeroIndex(-1);
+        navigate(`/account/${account.id}/${type}/history`);
         return;
     }
 
@@ -844,7 +866,7 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
                         </span>
                         {selectedCategory && (
                             <span className="text-[11px] font-normal px-2.5 py-0.5 rounded-full bg-white/10 text-white/60 border border-white/5 animate-in fade-in zoom-in-95 duration-200">
-                                {displayData.length} {type === 'live' ? 'flux' : type === 'vod' ? 'films' : 'séries'}
+                                {itemsToDisplay.length} {type === 'live' ? 'flux' : type === 'vod' ? 'films' : 'séries'}
                             </span>
                         )}
                     </span>
@@ -883,6 +905,7 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
                         onSelectCategory={handleCategorySelect} 
                         categoryCounts={categoryCounts}
                         favoritesCount={getFavorites(type).length}
+                        historyCount={getHistory(type).length}
                     />
                     
                     {/* Pane 2 & 3: Content or (Stream List + Player) */}
@@ -1069,6 +1092,16 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
                                     </div>
                                     <span className="text-xs bg-yellow-500/10 text-yellow-500 px-2 py-0.5 rounded-full font-medium shrink-0">
                                         {getFavorites(type).length}
+                                    </span>
+                                </div>
+                                <div onClick={() => handleCategorySelect('history')}
+                                    className="bg-fluent-accent/5 hover:bg-fluent-accent/10 border border-fluent-accent/20 p-5 rounded-window cursor-pointer transition-all flex items-center justify-between group shadow-sm animate-in fade-in slide-in-from-bottom-2 duration-300">
+                                    <div className="flex items-center gap-4 overflow-hidden">
+                                        <Clock className="text-fluent-accent group-hover:scale-110 transition-transform shrink-0" /> 
+                                        <span className="font-bold text-sm text-fluent-accent truncate">Historique</span>
+                                    </div>
+                                    <span className="text-xs bg-fluent-accent/10 text-fluent-accent px-2 py-0.5 rounded-full font-medium shrink-0">
+                                        {getHistory(type).length}
                                     </span>
                                 </div>
                                 {filteredCategories.map((cat, index) => {

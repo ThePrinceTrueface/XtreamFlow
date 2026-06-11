@@ -167,6 +167,81 @@ export const useUserPreferences = (accountId: string) => {
      });
   }, [accountId]);
 
+  const addToHistory = useCallback((item: XtreamStream, streamType: 'live' | 'vod' | 'series') => {
+    const itemId = item.stream_id || item.series_id;
+    if (!itemId) return;
+    const idStr = itemId.toString();
+
+    setPrefs(prev => {
+      const accountData = prev[accountId] || { favoritesTable: { live: [], vod: [], series: [] }, history: {} } as AccountPreferences;
+      const current = accountData.history?.[idStr];
+      
+      const updatedEntry: StreamProgress = {
+        time: current?.time || 0,
+        duration: current?.duration || 0,
+        progress: current?.progress || 0,
+        finished: current?.finished || false,
+        lastWatched: Date.now(),
+        item: {
+          ...item,
+          stream_type: streamType
+        }
+      };
+
+      return {
+        ...prev,
+        [accountId]: {
+          ...accountData,
+          history: {
+            ...accountData.history,
+            [idStr]: updatedEntry
+          }
+        }
+      };
+    });
+  }, [accountId]);
+
+  const getHistory = useCallback((type?: 'live' | 'vod' | 'series'): XtreamStream[] => {
+    const historyMap = prefs[accountId]?.history || {};
+    return Object.values(historyMap)
+      .filter((h: any) => {
+        if (!h.item) return false;
+        if (!type) return true;
+        const itemType = h.item.stream_type;
+        return itemType === type;
+      })
+      .sort((a, b) => b.lastWatched - a.lastWatched)
+      .map(h => h.item as XtreamStream);
+  }, [prefs, accountId]);
+
+  const clearHistory = useCallback((type?: 'live' | 'vod' | 'series') => {
+    setPrefs(prev => {
+      const accountData = prev[accountId];
+      if (!accountData || !accountData.history) return prev;
+
+      const newHistory = { ...accountData.history };
+      if (!type) {
+        // Clear all history
+        return {
+          ...prev,
+          [accountId]: { ...accountData, history: {} }
+        };
+      }
+
+      // Filter and delete items of specific type
+      Object.keys(newHistory).forEach(key => {
+        if (newHistory[key]?.item?.stream_type === type) {
+          delete newHistory[key];
+        }
+      });
+
+      return {
+        ...prev,
+        [accountId]: { ...accountData, history: newHistory }
+      };
+    });
+  }, [accountId]);
+
   // --- Player Settings Logic ---
 
   const getPlayerSettings = useCallback(() => {
@@ -213,6 +288,9 @@ export const useUserPreferences = (accountId: string) => {
     getProgress,
     updateProgress,
     clearProgress,
+    addToHistory,
+    getHistory,
+    clearHistory,
     getPlayerSettings,
     updatePlayerSettings,
     getAutoPlayNavigation,
