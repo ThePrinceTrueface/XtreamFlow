@@ -3,6 +3,7 @@ import { Play, Loader2 } from 'lucide-react';
 import { XtreamStream, XtreamEPGProgram, XtreamAccount } from '../../../types';
 import { createProxyUrl, decodeBase64 } from '../../../utils';
 import { cacheService } from '../../../services/cacheService';
+import { useEPGStore } from '../../../store/useEPGStore';
 
 // Forward ref to support scrollTo
 const List = React.forwardRef((props: any, ref: any) => {
@@ -128,8 +129,7 @@ const SIDEBAR_WIDTH = 220;
 const BATCH_SIZE = 10; // Fetch EPG for 10 channels at a time
 
 export const EPGView: React.FC<EPGViewProps> = ({ channels, account, onChannelClick, preselectedChannelId }) => {
-  const [epgData, setEpgData] = useState<Record<string, XtreamEPGProgram[]>>({});
-  const [loading, setLoading] = useState<Record<string, boolean>>({});
+  const { epgData, loading, fetchEPGForMultipleChannels } = useEPGStore();
   const [currentTime, setCurrentTime] = useState(Date.now());
   
   const headerScrollRef = useRef<HTMLDivElement>(null);
@@ -178,111 +178,6 @@ export const EPGView: React.FC<EPGViewProps> = ({ channels, account, onChannelCl
     }
   }, [preselectedChannelId, channels]);
 
-  const epgDataRef = useRef<Record<string, XtreamEPGProgram[]>>({});
-  const loadingRef = useRef<Record<string, boolean>>({});
-
-  // Batch Fetch EPG Logic
-  const fetchEPGBatch = useCallback(async (channelIds: string[]) => {
-      // Filter out channels already fetched or loading
-      const toFetch = channelIds.filter(id => !epgDataRef.current[id] && !loadingRef.current[id]);
-      if (toFetch.length === 0) return;
-
-      // Mark as loading
-      toFetch.forEach(id => loadingRef.current[id] = true);
-      setLoading(prev => {
-          const next = { ...prev };
-          toFetch.forEach(id => next[id] = true);
-          return next;
-      });
-
-      // Fetch individually (Xtream doesn't always support batch EPG well, or it's heavy)
-      // Optimization: We could use Promise.all but with concurrency limit.
-      // For now, simple parallel fetch for the batch.
-      
-      const promises = toFetch.map(async (streamId) => {
-          try {
-            const data = await cacheService.getEPG(account, streamId);
-            if (Array.isArray(data)) {
-                // 1. Normalize timestamps first
-                const normalizedListings = data.map((p: any) => {
-                    let start = p.start_timestamp;
-                    let end = p.stop_timestamp;
-                    // Heuristic for seconds vs ms
-                    if (start < 10000000000) start *= 1000;
-                    if (end < 10000000000) end *= 1000;
-                    return { ...p, start_timestamp: start, stop_timestamp: end };
-                });
-
-                // 2. Sort by start time ASC, then duration DESC (to keep longest program in case of same start)
-                normalizedListings.sort((a: any, b: any) => {
-                    if (a.start_timestamp !== b.start_timestamp) {
-                        return a.start_timestamp - b.start_timestamp;
-                    }
-                    return (b.stop_timestamp - b.start_timestamp) - (a.stop_timestamp - a.start_timestamp);
-                });
-
-                // 3. Sanitize overlaps
-                const sanitizedListings: any[] = [];
-                let lastProgram: any = null;
-
-                for (const prog of normalizedListings) {
-                    // Skip invalid duration
-                    if (prog.stop_timestamp <= prog.start_timestamp) continue;
-
-                    if (!lastProgram) {
-                        sanitizedListings.push(prog);
-                        lastProgram = prog;
-                        continue;
-                    }
-
-                    // Check for overlap
-                    if (prog.start_timestamp < lastProgram.stop_timestamp) {
-                        // If current program is fully contained within the last one, skip it
-                        if (prog.stop_timestamp <= lastProgram.stop_timestamp) {
-                            continue;
-                        }
-                        
-                        // If it's a partial overlap, cut previous one short
-                        lastProgram.stop_timestamp = prog.start_timestamp;
-                        
-                        // If clamping made the last program invalid, remove it
-                        if (lastProgram.stop_timestamp <= lastProgram.start_timestamp) {
-                            sanitizedListings.pop();
-                            lastProgram = sanitizedListings.length > 0 ? sanitizedListings[sanitizedListings.length - 1] : null;
-                        }
-                    }
-
-                    sanitizedListings.push(prog);
-                    lastProgram = prog;
-                }
-
-                return { streamId, listings: sanitizedListings };
-            }
-          } catch (e) {
-            console.error(`Failed to fetch EPG for ${streamId}`, e);
-          }
-          return { streamId, listings: [] };
-      });
-
-      const results = await Promise.all(promises);
-      
-      const newEpgData: Record<string, XtreamEPGProgram[]> = {};
-      results.forEach(r => {
-          // Store result regardless of length to prevent re-fetching empty EPGs
-          newEpgData[r.streamId] = r.listings;
-          epgDataRef.current[r.streamId] = r.listings;
-          loadingRef.current[r.streamId] = false;
-      });
-
-      setEpgData(prev => ({ ...prev, ...newEpgData }));
-      setLoading(prev => {
-          const next = { ...prev };
-          toFetch.forEach(id => next[id] = false);
-          return next;
-      });
-
-  }, [account]); // Removed epgData and loading dependencies
-
   // Detect visible rows and trigger fetch
   const onItemsRendered = useCallback(({ visibleStartIndex, visibleStopIndex }: any) => {
       const visibleChannels = channels.slice(visibleStartIndex, visibleStopIndex + 1);
@@ -290,12 +185,10 @@ export const EPGView: React.FC<EPGViewProps> = ({ channels, account, onChannelCl
           .map(c => c.stream_id?.toString())
           .filter(Boolean) as string[];
       
-      // Debounce or just call? react-window calls this often.
-      // We'll rely on the internal check in fetchEPGBatch to skip duplicates.
       if (idsToFetch.length > 0) {
-          fetchEPGBatch(idsToFetch);
+          fetchEPGForMultipleChannels(account, idsToFetch);
       }
-  }, [channels, fetchEPGBatch]);
+  }, [channels, account, fetchEPGForMultipleChannels]);
 
   // Generate Time Headers
   const timeHeaders = useMemo(() => {

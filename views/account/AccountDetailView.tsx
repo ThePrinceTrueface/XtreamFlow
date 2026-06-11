@@ -13,6 +13,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../db';
 import { useUserPreferences } from '../../hooks/useUserPreferences';
 import { useAppStore } from '../../store/useAppStore';
+import { useSyncStore } from '../../store/useSyncStore';
 
 interface RevisionResults {
   userInfo: any;
@@ -64,16 +65,23 @@ export const AccountDetailView: React.FC<{
   const { getAutoPlayNavigation } = useUserPreferences(accountId || '');
   const autoPlayItem = autoPlayFromUrl || getAutoPlayNavigation();
   
-  // -- PRELOAD STATE --
-  const [showPreloadPrompt, setShowPreloadPrompt] = useState(false);
-  const [isPreloading, setIsPreloading] = useState(false);
-  const [preloadProgressData, setPreloadProgressData] = useState({ step: '', percent: 0 });
-
-  // -- UPDATE STATE --
-  const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
-  const [updateOptions, setUpdateOptions] = useState({ live: true, vod: true, series: true, epg: false });
-  const [isUpdating, setIsUpdating] = useState(false);
-  const [updateProgressData, setUpdateProgressData] = useState({ step: '', percent: 0 });
+  // -- SYNC STATE (ZUSTAND) --
+  const {
+    showPreloadPrompt,
+    setShowPreloadPrompt,
+    isPreloading,
+    setIsPreloading,
+    preloadProgressData,
+    setPreloadProgressData,
+    isUpdateModalOpen,
+    setIsUpdateModalOpen,
+    updateOptions,
+    setUpdateOptions,
+    isUpdating,
+    setIsUpdating,
+    updateProgressData,
+    setUpdateProgressData,
+  } = useSyncStore();
   
   useEffect(() => {
     setActiveTab(tabFromUrl);

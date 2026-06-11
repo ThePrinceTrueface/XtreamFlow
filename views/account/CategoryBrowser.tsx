@@ -11,6 +11,8 @@ import { db } from '../../db';
 import { XTREAM_WORKER_CODE } from '../../workers/xtream.worker';
 import { useUserPreferences } from '../../hooks/useUserPreferences';
 import { cacheService } from '../../services/cacheService';
+import { useMediaStore } from '../../store/useMediaStore';
+import { useLivePlayerStore } from '../../store/useLivePlayerStore';
 
 // Sous-modules modularisés
 import { HeroSection } from './components/HeroSection';
@@ -41,15 +43,34 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
   
   const navigate = useNavigate();
   
-  // Navigation & UI State
-  const [uiMode, setUiMode] = useState<'normal' | 'flow'>(() => (localStorage.getItem('category_ui_mode') as 'normal' | 'flow') || 'normal');
-  const [viewMode, setViewMode] = useState<'grid' | 'epg'>('grid'); // New state for EPG toggle
-  const [currentLevel, setCurrentLevel] = useState<'categories' | 'items' | 'detail'>('categories');
-  const [selectedCategory, setSelectedCategory] = useState<XtreamCategory | null>(null);
-  
-  // Detail Navigation Stack
-  const [selectedItem, setSelectedItem] = useState<XtreamStream | null>(null);
-  const [historyStack, setHistoryStack] = useState<XtreamStream[]>([]); // To track deep navigation
+  const {
+    uiMode,
+    setUiMode,
+    viewMode,
+    setViewMode,
+    currentLevel,
+    setCurrentLevel,
+    selectedCategory,
+    setSelectedCategory,
+    selectedItem,
+    setSelectedItem,
+    historyStack,
+    setHistoryStack,
+    detailData,
+    setDetailData,
+    player,
+    setPlayer,
+    isPlayerExpanded,
+    setIsPlayerExpanded,
+    isPlayerFullWindow,
+    setIsPlayerFullWindow,
+    showStreamList,
+    setShowStreamList,
+    isTrailerMuted,
+    setIsTrailerMuted,
+    mediaSearchQuery: searchQuery,
+    setMediaSearchQuery: setSearchQuery,
+  } = useMediaStore();
   
   // Data State
   const [categories, setCategories] = useState<XtreamCategory[]>([]);
@@ -62,22 +83,16 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
   const [heroDetail, setHeroDetail] = useState<any>(null);
   const [heroPhase, setHeroPhase] = useState<'backdrop' | 'trailer'>('backdrop');
   const [isHeroFading, setIsHeroFading] = useState(false);
-  const [isTrailerMuted, setIsTrailerMuted] = useState(true); // Default muted for autoplay
   
-  // Player & Expansion State
-  const [player, setPlayer] = useState<{ 
-      url: string; 
-      title: string; 
-      type: 'live' | 'vod' | 'series';
-      currentItem?: XtreamStream;
-      currentEpisode?: any;
-  } | null>(null);
-  const [isPlayerExpanded, setIsPlayerExpanded] = useState(false);
-  const [isPlayerFullWindow, setIsPlayerFullWindow] = useState(false);
-  const [showStreamList, setShowStreamList] = useState(true); // Toggle for side-by-side stream list
-  const [epgPlayerHeight, setEpgPlayerHeight] = useState(220);
-  const [epgExpandedHeight, setEpgExpandedHeight] = useState(400);
-  const [isResizingEpgPlayer, setIsResizingEpgPlayer] = useState(false);
+  // Player & Expansion State (Zustand Live Player Store)
+  const {
+    epgPlayerHeight,
+    setEpgPlayerHeight,
+    epgExpandedHeight,
+    setEpgExpandedHeight,
+    isResizingEpgPlayer,
+    setIsResizingEpgPlayer,
+  } = useLivePlayerStore();
   const resizeState = useRef({ startY: 0, startHeight: 0 });
 
   // Refs
@@ -97,10 +112,7 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
 
   const { isFavorite, getFavorites, getHistory } = useUserPreferences(account.id);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  
-  const [detailData, setDetailData] = useState<any | null>(null); 
+  const [error, setError] = useState<string | null>(null); 
 
   // Computed display data to handle favorites reactivity and search
   const itemsToDisplay = useMemo(() => {
@@ -598,7 +610,7 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
 
   const handleDetail = useCallback((item: XtreamStream) => {
         if (currentLevel === 'detail' && selectedItem) {
-            setHistoryStack(prev => [...prev, selectedItem]);
+            setHistoryStack([...historyStack, selectedItem]);
         } else {
             setHistoryStack([]);
         }
@@ -882,7 +894,7 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
                 </div>
                 
                 {type === 'live' && (
-                    <Button variant="secondary" onClick={() => setViewMode(prev => prev === 'grid' ? 'epg' : 'grid')} className="!px-4 h-9 flex items-center gap-2 border-white/10 bg-white/5 hover:bg-white/10 transition-all">
+                    <Button variant="secondary" onClick={() => setViewMode(viewMode === 'grid' ? 'epg' : 'grid')} className="!px-4 h-9 flex items-center gap-2 border-white/10 bg-white/5 hover:bg-white/10 transition-all">
                         {viewMode === 'grid' ? <Layout size={18} /> : <List size={18} />}
                         <span className="text-[11px] font-bold uppercase tracking-wider">{viewMode === 'grid' ? 'Guide TV' : 'Liste'}</span>
                     </Button>

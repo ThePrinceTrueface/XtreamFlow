@@ -7,6 +7,8 @@ import { db } from './db';
 import { useAccounts } from './hooks/useAccounts';
 import { useServers } from './hooks/useServers';
 import { useAppStore } from './store/useAppStore';
+import { useSyncStore } from './store/useSyncStore';
+import { RefreshCw, WifiOff, AlertTriangle } from 'lucide-react';
 import { XtreamAccount, ViewState, ModalConfig, ModalType, SavedServer, AppBackup } from './types';
 import { AcrylicPanel, Modal } from './components/Win11UI';
 import { generateId, createProxyUrl } from './utils';
@@ -93,6 +95,14 @@ export default function App() {
     closeModal,
     showToast,
   } = useAppStore();
+
+  const {
+    isOnline,
+    isPreloading,
+    preloadProgressData,
+    isUpdating,
+    updateProgressData
+  } = useSyncStore();
 
   // Data State (using custom hooks)
   const { accounts } = useAccounts();
@@ -426,6 +436,41 @@ export default function App() {
         isMobileMenuOpen={isMobileMenuOpen} 
         onToggleMobileMenu={() => setIsMobileMenuOpen(!isMobileMenuOpen)} 
       />
+
+      {/* Network Offline Banner */}
+      {!isOnline && (
+        <div className="bg-amber-500/10 border-b border-amber-500/20 text-amber-200 text-[11px] py-1.5 px-4 flex items-center justify-between z-50 shrink-0">
+          <div className="flex flex-1 flex-wrap items-center gap-2">
+            <WifiOff size={13} className="text-amber-400 animate-pulse shrink-0" />
+            <span>
+              Mode hors-ligne activé. L'application utilise les catégories et flux en cache local !
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Global Background Sync/Update mini indicator */}
+      {(isPreloading || isUpdating) && (
+        <div className="bg-fluent-accent/10 border-b border-fluent-accent/10 text-white text-xs py-1.5 px-4 flex items-center justify-between z-50 shrink-0 relative overflow-hidden">
+          {/* Progress bar background fill */}
+          <div 
+            className="absolute left-0 top-0 bottom-0 bg-fluent-accent/15 transition-all duration-300" 
+            style={{ width: `${isPreloading ? preloadProgressData.percent : updateProgressData.percent}%` }}
+          />
+          <div className="flex items-center gap-2 relative z-10 truncate mr-4">
+            <RefreshCw size={12} className="text-fluent-accent animate-spin shrink-0" />
+            <span className="font-semibold text-fluent-accent uppercase tracking-wider text-[10px] shrink-0">
+              {isPreloading ? 'Mise en cache' : 'Mise à jour'} :
+            </span>
+            <span className="text-white/70 text-[11px] truncate">
+              {isPreloading ? preloadProgressData.step : updateProgressData.step}
+            </span>
+          </div>
+          <div className="font-bold text-[11px] text-fluent-accent shrink-0 relative z-10 flex items-center gap-1">
+            <span>{isPreloading ? Math.round(preloadProgressData.percent) : Math.round(updateProgressData.percent)}%</span>
+          </div>
+        </div>
+      )}
 
       <div className="flex flex-1 overflow-hidden relative">
         <Routes>
