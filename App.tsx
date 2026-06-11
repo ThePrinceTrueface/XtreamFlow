@@ -4,10 +4,9 @@ import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import { CheckCircle2, Minus, Square, X } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from './db';
-import { useAccounts } from './hooks/useAccounts';
-import { useServers } from './hooks/useServers';
 import { useAppStore } from './store/useAppStore';
 import { useSyncStore } from './store/useSyncStore';
+import { useAccountStore } from './store/useAccountStore';
 import { RefreshCw, WifiOff, AlertTriangle } from 'lucide-react';
 import { XtreamAccount, ViewState, ModalConfig, ModalType, SavedServer, AppBackup } from './types';
 import { AcrylicPanel, Modal } from './components/Win11UI';
@@ -104,9 +103,19 @@ export default function App() {
     updateProgressData
   } = useSyncStore();
 
-  // Data State (using custom hooks)
-  const { accounts } = useAccounts();
-  const { servers: savedServers } = useServers();
+  // Data State (Zustand Unified Store)
+  const {
+    accounts,
+    servers: savedServers,
+    loadAll: loadAccountsAndServers,
+    saveAccount: storeAccount,
+    deleteAccount: removeAccount,
+    toggleFavoriteAccount,
+    saveServer: storeServer,
+    deleteServer: removeServer,
+    importBackup,
+    exportBackup,
+  } = useAccountStore();
   
   const accountMatch = location.pathname.match(/\/account\/([^\/]+)/);
   const activeAccountId = accountMatch ? accountMatch[1] : null;
@@ -217,16 +226,18 @@ export default function App() {
           console.error("Failed to migrate servers", e);
         }
       }
+      
+      await loadAccountsAndServers();
     };
 
     migrate();
-  }, []);
+  }, [loadAccountsAndServers]);
 
   // --- Account Logic ---
 
   const handleSaveAccount = async (account: XtreamAccount, silent = false) => {
     try {
-      await db.accounts.put(account);
+      await storeAccount(account);
       
       if (!silent) {
           showModal(
@@ -247,10 +258,7 @@ export default function App() {
   };
 
   const toggleFavorite = async (id: string) => {
-    const account = await db.accounts.get(id);
-    if (account) {
-      await db.accounts.update(id, { isFavorite: !account.isFavorite });
-    }
+    await toggleFavoriteAccount(id);
   };
 
   const deleteAccount = (id: string) => {
@@ -259,8 +267,7 @@ export default function App() {
       'Delete Account',
       'Are you sure you want to permanently remove this account? This action cannot be undone.',
       async () => {
-        await db.accounts.delete(id);
-        await db.deleteAccountData(id);
+        await removeAccount(id);
         if (editingAccount?.id === id) {
           setEditingAccount(null);
           navigate('/manage-accounts');
@@ -284,7 +291,7 @@ export default function App() {
   // --- Server Library Logic ---
 
   const handleSaveServer = async (server: SavedServer) => {
-      await db.servers.put(server);
+      await storeServer(server);
       showToast("Server saved to library");
   };
 
@@ -294,7 +301,7 @@ export default function App() {
           'Delete Server',
           'Remove this server from your library? Linked accounts will not be deleted.',
           async () => {
-             await db.servers.delete(id);
+             await removeServer(id);
              showToast("Server removed");
           }
       );
@@ -314,13 +321,8 @@ export default function App() {
 
   const handleExportData = () => {
     try {
-      // Create a full backup object including version, accounts, and servers
-      const backup: AppBackup = {
-          version: '1.0',
-          timestamp: Date.now(),
-          accounts: accounts,
-          servers: savedServers
-      };
+      // Get the full backup object from the store
+      const backup = exportBackup();
 
       const dataStr = JSON.stringify(backup, null, 2);
       const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
@@ -338,71 +340,16 @@ export default function App() {
   };
 
   const handleImportData = async (data: any) => {
-    let importedAccounts: any[] = [];
-    let importedServers: any[] = [];
-
-    // Case 1: Legacy Format (Array of accounts)
-    if (Array.isArray(data)) {
-        importedAccounts = data;
-    } 
-    // Case 2: New Backup Format (Object)
-    else if (typeof data === 'object' && data !== null) {
-        if (Array.isArray(data.accounts)) importedAccounts = data.accounts;
-        if (Array.isArray(data.servers)) importedServers = data.servers;
-    } else {
-        showModal('error', 'Import Failed', 'The selected file is invalid or corrupted.');
-        return;
+    try {
+      const { accountsAdded, serversAdded } = await importBackup(data);
+      showModal(
+          'success', 
+          'Import Successful', 
+          `Data restored successfully.\n\nAccounts added: ${accountsAdded}\nServers added: ${serversAdded}`
+      );
+    } catch (e: any) {
+      showModal('error', 'Import Failed', e.message || 'An error occurred while restoring data.');
     }
-
-    // Process Accounts
-    const validAccounts = importedAccounts.filter(acc => 
-      acc.host && acc.username && acc.password
-    ).map(acc => ({
-      ...acc,
-      id: acc.id || generateId(),
-      status: 'untested' // Reset status on import
-    })) as XtreamAccount[];
-
-    // Process Servers
-    const validServers = importedServers.filter(srv => 
-        srv.host && (srv.protocol === 'http' || srv.protocol === 'https')
-    ).map(srv => ({
-        ...srv,
-        id: srv.id || generateId()
-    })) as SavedServer[];
-
-    if (validAccounts.length === 0 && validServers.length === 0) {
-      showModal('warning', 'No Data Found', 'No valid accounts or servers were found in the file.');
-      return;
-    }
-
-    // Merge Accounts
-    let newAccountsCount = 0;
-    if (validAccounts.length > 0) {
-        const existingIds = new Set(accounts.map(a => a.id));
-        const uniqueNew = validAccounts.filter(a => !existingIds.has(a.id));
-        newAccountsCount = uniqueNew.length;
-        if (newAccountsCount > 0) {
-            await db.accounts.bulkAdd(uniqueNew);
-        }
-    }
-
-    // Merge Servers
-    let newServersCount = 0;
-    if (validServers.length > 0) {
-        const existingIds = new Set(savedServers.map(s => s.id));
-        const uniqueNew = validServers.filter(s => !existingIds.has(s.id));
-        newServersCount = uniqueNew.length;
-        if (newServersCount > 0) {
-            await db.servers.bulkAdd(uniqueNew);
-        }
-    }
-    
-    showModal(
-        'success', 
-        'Import Successful', 
-        `Data restored successfully.\n\nAccounts added: ${newAccountsCount}\nServers added: ${newServersCount}`
-    );
   };
 
   // Main App Shell

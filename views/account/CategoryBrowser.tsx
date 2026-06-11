@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
-import { Tv, RefreshCw, ArrowLeft, Search, Folder, Layout, List, Film, Clapperboard, Columns, PanelLeftOpen, PanelLeftClose, Star, Clock } from 'lucide-react';
+import { Tv, RefreshCw, ArrowLeft, Search, Folder, Layout, List, Film, Clapperboard, Columns, PanelLeftOpen, PanelLeftClose, Star, Clock, Trash2 } from 'lucide-react';
 import { XtreamAccount, XtreamCategory, XtreamStream } from '../../types';
 import { Button } from '../../components/Win11UI';
 import { VideoPlayer } from '../../components/VideoPlayer';
@@ -110,9 +110,16 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
   const preselectionHandledRef = useRef<string | null>(null);
   const autoPlayedRef = useRef<string | null>(null);
 
-  const { isFavorite, getFavorites, getHistory } = useUserPreferences(account.id);
+  const { isFavorite, getFavorites, getHistory, clearHistory } = useUserPreferences(account.id);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null); 
+  
+  const [localSearchTerm, setLocalSearchTerm] = useState(searchQuery);
+
+  // Synchronize local search input term with store state
+  useEffect(() => {
+    setLocalSearchTerm(searchQuery);
+  }, [searchQuery]);
 
   // Computed display data to handle favorites reactivity and search
   const itemsToDisplay = useMemo(() => {
@@ -806,18 +813,27 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
   }
 
   function handleSearch(query: string) {
-    setSearchQuery(query);
-    const q = query.toLowerCase().trim();
-    if (workerRef.current && uiMode === 'flow') {
-         workerRef.current.postMessage({ type: 'FILTER', payload: { query: q }, id: Date.now() });
-    } else {
-        if (!q) {
-            setDisplayData(fullData);
-        } else {
-            setDisplayData(fullData.filter(i => (i.name || '').toLowerCase().includes(q)));
-        }
-    }
+    setLocalSearchTerm(query);
   }
+
+  // Intelligent Debounced Media Filtering
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      const q = localSearchTerm.toLowerCase().trim();
+      setSearchQuery(localSearchTerm);
+      if (workerRef.current && uiMode === 'flow') {
+          workerRef.current.postMessage({ type: 'FILTER', payload: { query: q }, id: Date.now() });
+      } else {
+          if (!q) {
+              setDisplayData(fullData);
+          } else {
+              setDisplayData(fullData.filter(i => (i.name || '').toLowerCase().includes(q)));
+          }
+      }
+    }, 250);
+
+    return () => clearTimeout(handler);
+  }, [localSearchTerm, fullData, uiMode, setSearchQuery]);
 
   const heroItem = useMemo(() => {
      return heroIndex !== -1 && heroIndex < displayData.length ? displayData[heroIndex] : null;
@@ -881,6 +897,20 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
                                 {itemsToDisplay.length} {type === 'live' ? 'flux' : type === 'vod' ? 'films' : 'séries'}
                             </span>
                         )}
+                        {selectedCategory?.category_id === 'history' && itemsToDisplay.length > 0 && (
+                            <Button
+                                variant="ghost"
+                                onClick={() => {
+                                    if (confirm("Voulez-vous vraiment effacer tout votre historique de lecture pour cette catégorie ?")) {
+                                        clearHistory(type);
+                                    }
+                                }}
+                                className="!px-2.5 h-7 !py-0 text-red-400 hover:text-red-300 hover:bg-red-500/10 text-[11px] flex items-center gap-1.5 transition-all animate-in fade-in zoom-in-95 duration-200 border border-red-500/10 rounded-md ml-2"
+                            >
+                                <Trash2 size={13} />
+                                <span>Effacer l'historique</span>
+                            </Button>
+                        )}
                     </span>
                 </h2>
             </div>
@@ -889,7 +919,7 @@ export const CategoryBrowser: React.FC<CategoryBrowserProps> = ({ account, type,
                     <input 
                         ref={searchInputRef}
                         className="w-full bg-black/40 border border-white/10 rounded-control pl-9 pr-4 py-2 text-[13px] text-white focus:border-fluent-accent focus:bg-black/60 transition-all placeholder:text-fluent-subtext/40 font-normal"
-                        placeholder={`Chercher dans ${currentConfig.label}...`} value={searchQuery} onChange={(e) => handleSearch(e.target.value)} />
+                        placeholder={`Chercher dans ${currentConfig.label}...`} value={localSearchTerm} onChange={(e) => handleSearch(e.target.value)} />
                     <Search size={15} className="absolute left-3 top-2.5 text-fluent-subtext/50" />
                 </div>
                 
